@@ -3,11 +3,24 @@ package main
 import (
 	"net"
 	"log"
+	"fmt"
 )
 
 func InitServer() {
 	me := NewContact(NewRandomKademliaID(), GetOutboundIP())
 	routingTable := NewRoutingTable(me)
+	RunServer(routingTable)
+}
+
+func JoinNetwork(addr string) {
+	me := NewContact(NewRandomKademliaID(), GetOutboundIP())
+	routingTable := NewRoutingTable(me)
+
+	contacts := NodeLookup(routingTable, addr, *routingTable.me.ID)
+	for _, contact := range contacts {
+		routingTable.AddContact(contact)
+	}
+	fmt.Println(routingTable, "\n")
 	RunServer(routingTable)
 }
 

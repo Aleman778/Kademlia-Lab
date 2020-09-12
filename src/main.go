@@ -8,9 +8,7 @@ import (
 
 
 func main() {
-	if len(os.Args) != 3 {
-		InitServer()
-	} else {
+	if len(os.Args) == 3 {
 		var rpcType RPCType
 
 		switch os.Args[2] {
@@ -24,12 +22,17 @@ func main() {
 			rpcType = FindValue
 		}
 		client(os.Args[1], rpcType)
+	} else if len(os.Args) == 2 {
+		JoinNetwork(os.Args[1])
+	} else {
+		InitServer()
 	}
 }
 
 func client(service string, rpc RPCType) {
 	rpcMsg := RPCMessage{
 		Type: rpc,
+		Me: NewContact(NewRandomKademliaID(), ""),
 		Data: []byte(nil)}
 
 	switch rpcMsg.Type {
@@ -57,6 +60,18 @@ func client(service string, rpc RPCType) {
 	var rrpcMsg RPCMessage
 	DecodeRPCMessage(&rrpcMsg, inputBytes[:length])
 	fmt.Println(rrpcMsg.String())
+
+	switch rrpcMsg.Type {
+	case Ping:
+	case Store:
+	case FindNode:
+		var contacts  []Contact
+		DecodeContacts(&contacts, rrpcMsg.Data)
+		fmt.Println("Contacts Decoded: ", contacts)
+	case FindValue:
+	}
+
+	fmt.Println("")
 }
 
 

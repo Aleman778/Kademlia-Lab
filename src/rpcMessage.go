@@ -7,6 +7,7 @@ import (
 
 type RPCMessage struct {
 	Type RPCType
+	Me Contact
 	Data []byte
 }
 
@@ -30,7 +31,7 @@ func (t RPCType) String() string {
 
 
 func (msg RPCMessage) String() string {
-	return "Type: " + msg.Type.String() + "\nData: " + string(msg.Data)
+	return "Type: " + msg.Type.String() + "\nID: " + msg.Me.String() + "\nData: " + string(msg.Data)
 }
 
 func EncodeRPCMessage(rpcMessage RPCMessage) []byte {
