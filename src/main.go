@@ -37,9 +37,12 @@ func (msg RPCMessage) String() string {
 }
 
 
+type RPCFindNode [20]byte
+
+
 func main() {
 	if len(os.Args) != 3 {
-		server()
+		InitServer()
 	} else {
 		var rpcType RPCType
 
@@ -94,47 +97,6 @@ func client(service string, rpc RPCType) {
 	}
 }
 
-
-func server() {
-	udpAddr, err := net.ResolveUDPAddr("udp4", ":8080")
-	checkError(err)
-
-	conn, err := net.ListenUDP("udp4", udpAddr)
-	checkError(err)
-	defer conn.Close()
-
-	for {
-		handleClient(conn)
-	}
-}
-
-func handleClient(conn *net.UDPConn) {
-
-	inputBytes := make([]byte, 1024)
-	length, addr, err := conn.ReadFromUDP(inputBytes)
-	buffer := bytes.NewBuffer(inputBytes[:length])
-
-	decoder := gob.NewDecoder(buffer)
-
-	var rpcType RPCMessage
-	err = decoder.Decode(&rpcType)
-	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
-		return
-
-	}
-	fmt.Println(rpcType.String())
-
-	encoder := gob.NewEncoder(buffer)
-	err = encoder.Encode(rpcType)
-	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
-		return
-
-	}
-
-	conn.WriteToUDP(buffer.Bytes(), addr)
-}
 
 
 func checkError(err error) {
