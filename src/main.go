@@ -4,40 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"encoding/gob"
-	"bytes"
 )
-
-type RPCMessage struct {
-	Type RPCType
-	Data []byte
-}
-
-type RPCType int
-
-const (
-	Ping RPCType = iota
-	Store
-	FindNode
-	FindValue
-)
-
-func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue"}
-	if len(rpcType) < int(t) {
-		return ""
-	}
-
-	return rpcType[t]
-}
-
-
-func (msg RPCMessage) String() string {
-	return "Type: " + msg.Type.String() + "\nData: " + string(msg.Data)
-}
-
-
-type RPCFindNode [20]byte
 
 
 func main() {
@@ -61,9 +28,17 @@ func main() {
 }
 
 func client(service string, rpc RPCType) {
-	rpcType := RPCMessage{
+	rpcMsg := RPCMessage{
 		Type: rpc,
-		Data: []byte("asdasda")}
+		Data: []byte(nil)}
+
+	switch rpcMsg.Type {
+	case Ping:
+	case Store:
+	case FindNode:
+		rpcMsg.Data = EncodeKademliaID(*NewRandomKademliaID())
+	case FindValue:
+	}
 
 	udpAddr, err := net.ResolveUDPAddr("udp4", service)
 	checkError(err)
@@ -73,30 +48,16 @@ func client(service string, rpc RPCType) {
 
 	defer conn.Close()
 
-	for i := 0; i < 3; i++ {
-		var buffer bytes.Buffer
-		encoder := gob.NewEncoder(&buffer)
-		decoder := gob.NewDecoder(&buffer)
+	_, err = conn.Write(EncodeRPCMessage(rpcMsg))
+	checkError(err)
 
-		err = encoder.Encode(rpcType)
-		checkError(err)
+	inputBytes := make([]byte, 1024)
+	length, _, _ := conn.ReadFromUDP(inputBytes)
 
-		_, err = conn.Write(buffer.Bytes())
-		checkError(err)
-
-		inputBytes := make([]byte, 1024)
-		length, _, err := conn.ReadFromUDP(inputBytes)
-		buffer.Write(inputBytes[:length])
-
-		var rrpcType RPCMessage
-		err = decoder.Decode(&rrpcType)
-		checkError(err)
-
-		fmt.Println(rrpcType.String())
-		buffer.Reset()
-	}
+	var rrpcMsg RPCMessage
+	DecodeRPCMessage(&rrpcMsg, inputBytes[:length])
+	fmt.Println(rrpcMsg.String())
 }
-
 
 
 func checkError(err error) {

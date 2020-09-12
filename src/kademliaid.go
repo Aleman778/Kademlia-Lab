@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/hex"
 	"math/rand"
+	"bytes"
+	"encoding/gob"
 )
 
 // the static number of bytes in a KademliaID
@@ -67,3 +69,19 @@ func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 func (kademliaID *KademliaID) String() string {
 	return hex.EncodeToString(kademliaID[0:IDLength])
 }
+
+func EncodeKademliaID(id KademliaID) []byte {
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	err := encoder.Encode(id)
+	checkError(err)
+	return buffer.Bytes()
+}
+
+func DecodeKademliaID(id *KademliaID, data []byte) {
+	buffer := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(id)
+	checkError(err)
+}
+

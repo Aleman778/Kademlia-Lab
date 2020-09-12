@@ -12,7 +12,7 @@ func InitServer() {
 }
 
 func RunServer(routingTable *RoutingTable) {
-	Listen(":8080")
+	Listen(routingTable, ":8080")
 }
 
 

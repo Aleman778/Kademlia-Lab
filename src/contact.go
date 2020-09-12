@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"sort"
+	"bytes"
+	"encoding/gob"
 )
 
 // Contact definition
@@ -12,7 +14,6 @@ type Contact struct {
 	Address  string
 	distance *KademliaID
 }
-
 // NewContact returns a new instance of a Contact
 func NewContact(id *KademliaID, address string) Contact {
 	return Contact{id, address, nil}
@@ -71,3 +72,19 @@ func (candidates *ContactCandidates) Swap(i, j int) {
 func (candidates *ContactCandidates) Less(i, j int) bool {
 	return candidates.contacts[i].Less(&candidates.contacts[j])
 }
+
+func EncodeContacts(contacts []Contact) []byte {
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	err := encoder.Encode(contacts)
+	checkError(err)
+	return buffer.Bytes()
+}
+
+func DecodeContacts(contacts *[]Contact, data []byte) {
+	buffer := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(contacts)
+	checkError(err)
+}
+

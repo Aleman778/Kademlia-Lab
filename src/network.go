@@ -3,14 +3,12 @@ package main
 import (
 	"fmt"
 	"net"
-	"bytes"
-	"encoding/gob"
 )
 
 type Network struct {
 }
 
-func Listen(port string) {
+func Listen(routingTable *RoutingTable, port string) {
 	udpAddr, err := net.ResolveUDPAddr("udp4", port)
 	checkError(err)
 
@@ -19,7 +17,7 @@ func Listen(port string) {
 	defer conn.Close()
 
 	for {
-		handleClient(conn)
+		handleClient(routingTable, conn)
 	}
 }
 
@@ -39,58 +37,60 @@ func (network *Network) SendStoreMessage(data []byte) {
 	// TODO
 }
 
-func handleClient(conn *net.UDPConn) {
+func handleClient(routingTable *RoutingTable, conn *net.UDPConn) {
 
 	inputBytes := make([]byte, 1024)
-	length, addr, err := conn.ReadFromUDP(inputBytes)
-	buffer := bytes.NewBuffer(inputBytes[:length])
+	length, addr, _ := conn.ReadFromUDP(inputBytes)
 
-	decoder := gob.NewDecoder(buffer)
+	var rpcMsg RPCMessage
+	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
+	fmt.Println(rpcMsg.String())
 
-	var rpcType RPCMessage
-	err = decoder.Decode(&rpcType)
-	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
-		return
-
-	}
-	fmt.Println(rpcType.String())
-
-	switch rpcType.Type {
+	switch rpcMsg.Type {
 	case Ping:
-		HandlePingMessage(rpcType.Data, addr)
+		HandlePingMessage(routingTable, rpcMsg.Data, conn, addr)
 	case Store:
-		HandleStoreMessage(rpcType.Data, addr)
+		HandleStoreMessage(routingTable, rpcMsg.Data, conn, addr)
 	case FindNode:
-		HandleFindNodeMessage(rpcType.Data, addr)
+		HandleFindNodeMessage(routingTable, rpcMsg.Data, conn, addr)
 	case FindValue:
-		HandleFindValueMessage(rpcType.Data, addr)
+		HandleFindValueMessage(routingTable, rpcMsg.Data, conn, addr)
 	}
 
-	encoder := gob.NewEncoder(buffer)
-	err = encoder.Encode(rpcType)
-	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
-		return
-
-	}
-
-	conn.WriteToUDP(buffer.Bytes(), addr)
 }
 
-func HandlePingMessage(Data []byte, addr *net.UDPAddr) {
+func HandlePingMessage(routingTable *RoutingTable, Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: Ping,
+		Data: Data}
+	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), addr)
 	//TODO
 }
 
-func HandleStoreMessage(Data []byte, addr *net.UDPAddr) {
+func HandleStoreMessage(routingTable *RoutingTable, Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: Store,
+		Data: Data}
+	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), addr)
 	//TODO
 }
 
-func HandleFindNodeMessage(Data []byte, addr *net.UDPAddr) {
+func HandleFindNodeMessage(routingTable *RoutingTable, Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+	var id KademliaID
+	DecodeKademliaID(&id, Data)
+	contacts := routingTable.FindClosestContacts(&id, 3)
+	rpcMsg := RPCMessage{
+		Type: FindNode,
+		Data: EncodeContacts(contacts)}
+	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), addr)
+}
+
+func HandleFindValueMessage(routingTable *RoutingTable, Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: FindValue,
+		Data: Data}
+	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), addr)
 	//TODO
 }
 
-func HandleFindValueMessage(Data []byte, addr *net.UDPAddr) {
-	//TODO
-}
 
