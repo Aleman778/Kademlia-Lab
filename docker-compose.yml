@@ -25,6 +25,8 @@ services:
         window: 10s
 #    ports:
 #      - "4000:80"
+    environment:
+      KADEMLIA: kademliaSerrver
     networks:
       - kademlia_network
       

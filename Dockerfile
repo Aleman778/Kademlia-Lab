@@ -13,12 +13,12 @@ FROM golang:1.14-alpine
 # $ docker build . -t kadlab
 
 
-COPY src/ .
+COPY . .
 
-WORKDIR server/
+WORKDIR src/
 
 RUN apk add curl
 RUN go build 
 
-ENTRYPOINT ./server
 
+ENTRYPOINT ./src
