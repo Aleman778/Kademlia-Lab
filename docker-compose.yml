@@ -6,14 +6,25 @@
 # command requires that a docker swarm is already running in order to function.
 
 version: "3"
-services:
-  kademliaNodes:
+services: 
+  kademliaInitNode:
     image: kadlab:latest # Make sure your Docker image has this name.
     stdin_open: true
     tty: true
+    ports:
+      - "4000:8080/udp"
+    networks:
+      - kademlia_network
+    
+  kademliaNodes:
+    image: kadlab:latest # Make sure your Docker image has this name.
+    entrypoint: ["./kademlia"]
+    command: ["join", "kademliaInitNode:8080"]
+    stdin_open: true
+    tty: true
     deploy:
-      mode: replicated
-      replicas: 2
+      mode: replicated 
+      replicas: 10
 #        resources:
 #           limits:
 #              cpus: "0.1"
@@ -25,8 +36,8 @@ services:
         window: 10s
 #    ports:
 #      - "4000:80"
-    environment:
-      KADEMLIA: kademliaSerrver
+    depends_on:
+      - "kademliaInitNode"
     networks:
       - kademlia_network
       

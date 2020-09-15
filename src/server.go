@@ -3,7 +3,6 @@ package main
 import (
 	"net"
 	"log"
-	"fmt"
 )
 
 func InitServer() {
@@ -20,7 +19,6 @@ func JoinNetwork(addr string) {
 	for _, contact := range contacts {
 		routingTable.AddContact(contact)
 	}
-	fmt.Println(routingTable, "\n")
 	RunServer(routingTable)
 }
 

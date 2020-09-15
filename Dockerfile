@@ -12,12 +12,11 @@ FROM golang:1.14-alpine
 #
 # $ docker build . -t kadlab
 
-
 COPY . .
 
 WORKDIR src/
 
-RUN apk add curl
 RUN go build -o kademlia
 
-CMD ./kademlia serve
+ENTRYPOINT ["./kademlia", "serve"]
+

@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"os"
-    "flag"
-    "strings"
+	"flag"
+	"strings"
+	"math/rand"
+	"time"
 )
 
 const VERSION_STRING string    = "Kademlia version 1.0.0"
@@ -22,6 +24,8 @@ const EXIT_HELP_STRING string  = "Usage:  kademlia kill\n\n" +
 
 
 func main() {
+    rand.Seed(time.Now().UTC().UnixNano())
+
     // Setup CLI arguments
     showVersion := flag.Bool("-version", false, "Print version number and quit");
     showV := flag.Bool("v", false, "Print version number and quit");
@@ -37,14 +41,14 @@ func main() {
             break;
         }
     }
-    
+
     // Parse flags
     flag.Parse();
     if (*showVersion || *showV) {
         fmt.Printf(VERSION_STRING);
         return;
     }
-    
+
     // Run CLI commands
     if command != "" {
         // flag.Parse();
@@ -90,7 +94,7 @@ func main() {
                 fmt.Printf("%s\n", SERVE_HELP_STRING);
                 return;
             }
-            
+
             InitServer();
             break;
 
@@ -138,7 +142,7 @@ func main() {
 func client(service string, rpc RPCType) {
 	rpcMsg := RPCMessage{
 		Type: rpc,
-		Me: NewContact(NewRandomKademliaID(), ""),
+		Me: NewContact(NewRandomKademliaID(), "client"),
 		Data: []byte(nil)}
 
 	switch rpcMsg.Type {
