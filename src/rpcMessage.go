@@ -18,10 +18,11 @@ const (
 	Store
 	FindNode
 	FindValue
+    ExitNode
 )
 
 func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue"}
+	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "ExitNode"}
 	if len(rpcType) < int(t) {
 		return ""
 	}

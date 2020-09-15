@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+    "os"
 )
 
 type Network struct {
@@ -86,6 +87,8 @@ func handleClient(routingTable *RoutingTable, conn *net.UDPConn) {
 		HandleFindNodeMessage(routingTable, rpcMsg.Data, conn, addr)
 	case FindValue:
 		HandleFindValueMessage(routingTable, rpcMsg.Data, conn, addr)
+    case ExitNode:
+        HandleExitNodeMessage(routingTable, conn, addr)
 	}
 
 }
@@ -128,4 +131,11 @@ func HandleFindValueMessage(routingTable *RoutingTable, Data []byte, conn *net.U
 	//TODO
 }
 
-
+func HandleExitNodeMessage(routingTable *RoutingTable, conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: ExitNode,
+		Me: routingTable.me,
+		Data: nil}
+	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), addr)
+    os.Exit(0);
+}

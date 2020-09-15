@@ -18,7 +18,6 @@ COPY . .
 WORKDIR src/
 
 RUN apk add curl
-RUN go build 
+RUN go build -o kademlia
 
-
-ENTRYPOINT ./src
+CMD ./kademlia serve
