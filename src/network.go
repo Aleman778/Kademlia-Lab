@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"net"
-    "os"
+	"os"
+	"crypto/sha1"
+	"encoding/gob"
 )
 
 type Network struct {
