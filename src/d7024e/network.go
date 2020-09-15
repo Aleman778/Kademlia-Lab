@@ -74,8 +74,9 @@ func (network *Network) SendFindDataMessage(hash string) {
 			if err != nil {
 				fmt.Errorf("Error in SendFindDataMessage: %v", err)
 			} else {
-				msg := []byte("FINDD\n")
-				conn.Write(msg)
+				msg := MSG{findData, [], network.table.me}
+				enc := gob.NewEncoder(conn)
+				err := enc.Encode(msg)
 			}
 		}(contact.Address)
 	}

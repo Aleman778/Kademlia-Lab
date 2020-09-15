@@ -8,7 +8,23 @@ import (
 	"encoding/gob"
 )
 
+const k = 5
+
 type Network struct {
+	table *RoutingTable
+}
+
+type Rpc int
+
+const (
+	findData Rpc = iota
+	sendData
+)
+
+type MSG struct {
+	Msg Rpc
+	Data []byte
+	Me Contact
 }
 
 func Listen(routingTable *RoutingTable, port string) {
