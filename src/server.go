@@ -7,23 +7,23 @@ import (
 
 func InitServer() {
 	me := NewContact(NewRandomKademliaID(), GetOutboundIP())
-	routingTable := NewRoutingTable(me)
-	RunServer(routingTable)
+	network := Network{NewRoutingTable(me)}
+	RunServer(&network)
 }
 
 func JoinNetwork(addr string) {
 	me := NewContact(NewRandomKademliaID(), GetOutboundIP())
-	routingTable := NewRoutingTable(me)
+	network := Network{NewRoutingTable(me)}
 
-	contacts := NodeLookup(routingTable, addr, *routingTable.me.ID)
+	contacts := network.NodeLookup(addr, *network.table.me.ID)
 	for _, contact := range contacts {
-		routingTable.AddContact(contact)
+		network.table.AddContact(contact)
 	}
-	RunServer(routingTable)
+	RunServer(&network)
 }
 
-func RunServer(routingTable *RoutingTable) {
-	Listen(routingTable, ":8080")
+func RunServer(network *Network) {
+	network.Listen(":8080")
 }
 
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"flag"
 	"strings"
@@ -105,7 +104,7 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-            client("localhost:8080", ExitNode);
+            SendExitNode("localhost:8080");
             break;
         default:
             fmt.Printf("\nInvalid command '%s' was found\n", command);
@@ -139,51 +138,22 @@ func main() {
 
 
 
-func client(service string, rpc RPCType) {
+func SendExitNode(service string) {
 	rpcMsg := RPCMessage{
-		Type: rpc,
-		Me: NewContact(NewRandomKademliaID(), "client"),
+		Type: ExitNode,
+		IsNode: false,
+		Sender: NewContact(NewRandomKademliaID(), "client"),
 		Data: []byte(nil)}
 
-	switch rpcMsg.Type {
-	case Ping:
-	case Store:
-	case FindNode:
-		rpcMsg.Data = EncodeKademliaID(*NewRandomKademliaID())
-	case FindValue:
-	}
-
-	udpAddr, err := net.ResolveUDPAddr("udp4", service)
-	checkError(err)
-
-	conn, err := net.DialUDP("udp4", nil, udpAddr)
-	checkError(err)
-
+	conn := rpcMsg.SendTo(service)
 	defer conn.Close()
 
-	_, err = conn.Write(EncodeRPCMessage(rpcMsg))
-	checkError(err)
-
-	inputBytes := make([]byte, 1024)
-	length, _, _ := conn.ReadFromUDP(inputBytes)
-
-	var rrpcMsg RPCMessage
-	DecodeRPCMessage(&rrpcMsg, inputBytes[:length])
-	fmt.Println(rrpcMsg.String())
-
-	switch rrpcMsg.Type {
-	case Ping:
-	case Store:
-	case FindNode:
-		var contacts  []Contact
-		DecodeContacts(&contacts, rrpcMsg.Data)
-		fmt.Println("Contacts Decoded: ", contacts)
-	case FindValue:
-    case ExitNode:
-        fmt.Println("Node has been terminated");
+	responesMsg, _ := GetRPCMessage(conn)
+	if responesMsg.Type == ExitNode {
+		fmt.Println("Node has been terminated");
+	} else {
+		fmt.Println("Error: Expected ExitNode Message");
 	}
-
-	fmt.Println("")
 }
 
 
