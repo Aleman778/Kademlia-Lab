@@ -71,8 +71,9 @@ func main() {
                 return;
             }
             hash := os.Args[argIndex];
-            fmt.Printf("Get data from hash: %s", hash);
+            fmt.Printf("Get data from hash: %s", hash, "\n");
             // GetData(hash)
+	    test(hash)
             break;
 
         case "join":
@@ -148,7 +149,8 @@ func SendExitNode(service string) {
 	conn := rpcMsg.SendTo(service)
 	defer conn.Close()
 
-	responesMsg, _ := GetRPCMessage(conn)
+	responesMsg, _, err := GetRPCMessage(conn, 0)
+	checkError(err)
 	if responesMsg.Type == ExitNode {
 		fmt.Println("Node has been terminated");
 	} else {
@@ -156,6 +158,35 @@ func SendExitNode(service string) {
 	}
 }
 
+func test(hash string) {
+	rpcMsg := RPCMessage{
+		Type: Test,
+		IsNode: false,
+		Sender: NewContact(NewRandomKademliaID(), "client"),
+		Data: EncodeKademliaID(*NewKademliaID(hash))}
+
+	conn := rpcMsg.SendTo("localhost:8080")
+	defer conn.Close()
+
+
+	var responesMsg RPCMessage
+
+	inputBytes := make([]byte, 1024)
+	length, _, err := conn.ReadFromUDP(inputBytes)
+	checkError(err)
+
+	DecodeRPCMessage(&responesMsg, inputBytes[:length])
+	fmt.Println("Recived Msg:\n", responesMsg.String(), "\n")
+	checkError(err)
+	if responesMsg.Type == Test {
+		var contacts []Contact
+		DecodeContacts(&contacts, responesMsg.Data)
+		fmt.Println("Contacts: ", contacts);
+	} else {
+		fmt.Println("Error: Expected Test Message");
+	}
+
+}
 
 func checkError(err error) {
 	if err != nil {

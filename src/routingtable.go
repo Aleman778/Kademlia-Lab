@@ -1,5 +1,9 @@
 package main
 
+import (
+	"sync"
+)
+
 const bucketSize = 20
 
 
@@ -8,6 +12,7 @@ const bucketSize = 20
 type RoutingTable struct {
 	me      Contact
 	buckets [IDLength * 8]*bucket
+	mutex sync.RWMutex
 }
 
 // NewRoutingTable returns a new instance of a RoutingTable
@@ -23,6 +28,11 @@ func NewRoutingTable(me Contact) *RoutingTable {
 // AddContact add a new contact to the correct Bucket
 func (routingTable *RoutingTable) AddContact(contact Contact) {
 	bucketIndex := routingTable.getBucketIndex(contact.ID)
+
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
+
 	bucket := routingTable.buckets[bucketIndex]
 	bucket.AddContact(contact)
 }
@@ -31,6 +41,10 @@ func (routingTable *RoutingTable) AddContact(contact Contact) {
 func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count int) []Contact {
 	var candidates ContactCandidates
 	bucketIndex := routingTable.getBucketIndex(target)
+
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
 	bucket := routingTable.buckets[bucketIndex]
 
 	candidates.Append(bucket.GetContactAndCalcDistance(target))
@@ -57,6 +71,9 @@ func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count 
 
 // getBucketIndex get the correct Bucket index for the KademliaID
 func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
 	distance := id.CalcDistance(routingTable.me.ID)
 	for i := 0; i < IDLength; i++ {
 		for j := 0; j < 8; j++ {
@@ -68,3 +85,12 @@ func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
 
 	return IDLength*8 - 1
 }
+
+
+func (routingTable *RoutingTable) GetMe() Contact {
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
+	return routingTable.me
+}
+

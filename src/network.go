@@ -9,6 +9,7 @@ import (
 )
 
 const k = 5
+const ALPHA = 3
 
 type Network struct {
 	table *RoutingTable
@@ -35,6 +36,8 @@ func (network *Network) Listen(port string) {
 	checkError(err)
 	defer conn.Close()
 
+	fmt.Println("Sever setup finished")
+
 	for {
 		network.HandleClient(conn)
 	}
@@ -44,9 +47,122 @@ func (network *Network) SendPingMessage(contact *Contact) {
 	// TODO
 }
 
-func (network *Network) SendFindContactMessage(contact *Contact) {
-	// TODO
+func (network *Network) InitNodeLookup(address string) {
+	var called ContactCandidates
+	me := network.table.GetMe()
+	me.CalcDistance(me.ID)
+	called.Add(me)
+
+	var notCalled ContactCandidates
+	contacts, err := network.SendFindContactMessage(address, *me.ID)
+	checkError(err)
+
+	for _, contact := range contacts {
+		if !notCalled.InCandidates(contact) && !called.InCandidates(contact) {
+			contact.CalcDistance(me.ID)
+			notCalled.Add(contact)
+		}
+	}
+
+	notCalled.Sort()
+
+	network.HandleNodeLookupGoRoutines(*me.ID, called, notCalled)
 }
+
+func (network *Network) NodeLookup(id KademliaID) []Contact {
+	var called ContactCandidates
+	me := network.table.GetMe()
+	me.CalcDistance(&id)
+	called.Add(me)
+
+	var notCalled ContactCandidates
+	notCalled.Append(network.table.FindClosestContacts(&id, k))
+	notCalled.Sort()
+
+	return network.HandleNodeLookupGoRoutines(id, called, notCalled)
+}
+
+func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called ContactCandidates, notCalled ContactCandidates) []Contact {
+	readCh := make(chan []Contact)
+	defer close(readCh)
+
+	writeCh := make(chan Contact)
+	defer close(writeCh)
+
+	numNotRunning := ALPHA
+	isDone := false
+
+	// Start ALPHA GoRoutines
+	for i := 0; i < ALPHA; i++ {
+		go network.NodeLookupGoRoutine(id, readCh, writeCh)
+		if notCalled.Len() > 0 {
+			numNotRunning -= 1
+			contact := notCalled.Drop(0)
+			called.Add(contact)
+			writeCh <- contact
+		}
+	}
+	called.Sort()
+
+
+	for {
+		if numNotRunning == ALPHA {
+			length := called.Len()
+			if length < k {
+				return called.GetContacts(length)
+			}
+			return called.GetContacts(k)
+		}
+
+		// Get contacts from one of the GoRoutines respones messages
+		contacts := <-readCh
+		numNotRunning += 1
+
+		// Add uncontacted nodes to the notCalled list.
+		for _, contact := range contacts {
+			if !notCalled.InCandidates(contact) && !called.InCandidates(contact) {
+				contact.CalcDistance(&id)
+				notCalled.Add(contact)
+			}
+		}
+		notCalled.Sort()
+
+
+		// Make all not running GoRoutines send findnode rpc if there are any uncontacted contacts
+		for {
+			if notCalled.Len() != 0 && called.Len() >= k  {
+				isDone = called.Get(k-1).distance.Less(notCalled.Get(0).distance)
+			}
+
+			if numNotRunning < 1 || notCalled.Len() == 0 || isDone {
+				break
+			}
+			numNotRunning -= 1
+			contact := notCalled.Drop(0)
+			called.Add(contact)
+			writeCh <- contact
+		}
+		called.Sort()
+	}
+}
+
+// GoRoutine that sends FindNode
+func (network *Network) NodeLookupGoRoutine(id KademliaID, writeCh chan<- []Contact, readCh <-chan Contact) {
+	for {
+		contact, more := <-readCh
+		if !more {
+			return
+		}
+
+		contacts, err := network.SendFindContactMessage(contact.Address, id)
+		if err != nil {
+			writeCh <- []Contact{}
+		} else {
+			writeCh <- contacts
+		}
+	}
+}
+
 
 func (network *Network) SendFindDataMessage(hash string) {
 	hashID := NewKademliaID(hash)
@@ -54,7 +170,7 @@ func (network *Network) SendFindDataMessage(hash string) {
 
 	for _, contact := range closest {
 		go func(address string) {
-			conn, err := net.Dial("udp", address)
+			conn, err := net.Dial("udp4", address)
 			defer conn.Close()
 			if err != nil {
 				fmt.Errorf("Error in SendFindDataMessage: %v", err)
@@ -73,12 +189,12 @@ func (network *Network) SendStoreMessage(data []byte) {
 
 	for _, contact := range closest {
 		go func(address string) {
-			conn, err := net.Dial("udp", address) //This might go outside go func
+			conn, err := net.Dial("udp4", address) //This might go outside go func
 			defer conn.Close()
 			if err != nil {
 				fmt.Errorf("Error in net.Dial: %v", err)
 			} else {
-				msg := MSG{sendData, data, network.table.me}
+				msg := MSG{sendData, data, network.table.GetMe()}
 				enc := gob.NewEncoder(conn)
 				err := enc.Encode(msg)
 				if err != nil {
@@ -91,17 +207,21 @@ func (network *Network) SendStoreMessage(data []byte) {
 
 
 
-func (network *Network) NodeLookup(addr string, id KademliaID) []Contact {
+func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Contact, error) {
 	rpcMsg := RPCMessage{
 		Type: FindNode,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: EncodeKademliaID(id)}
 
 	conn := rpcMsg.SendTo(addr)
 	defer conn.Close()
 
-	responesMsg, _ := GetRPCMessage(conn)
+	responesMsg, _, err := GetRPCMessage(conn, 15)
+	if err != nil {
+		fmt.Println("\nGeting response timeout\n")
+		return []Contact{}, err
+	}
 
 	if responesMsg.IsNode {
 		network.table.AddContact(responesMsg.Sender)
@@ -109,13 +229,19 @@ func (network *Network) NodeLookup(addr string, id KademliaID) []Contact {
 
 	var contacts []Contact
 	DecodeContacts(&contacts, responesMsg.Data)
-	return contacts
+	return contacts, nil
 }
 
 func (network *Network) HandleClient(conn *net.UDPConn) {
-	rpcMsg, addr := GetRPCMessage(conn)
+	rpcMsg, addr, err := GetRPCMessage(conn, 0)
 
-	network.table.AddContact(rpcMsg.Sender)
+	if err != nil {
+		return
+	}
+
+	if rpcMsg.IsNode {
+		network.table.AddContact(rpcMsg.Sender)
+	}
 
 	switch rpcMsg.Type {
 	case Ping:
@@ -128,15 +254,23 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 		network.HandleFindValueMessage(rpcMsg.Data, conn, addr)
 	case ExitNode:
 		network.HandleExitNodeMessage(conn, addr)
+	case Test:
+		var id KademliaID
+		DecodeKademliaID(&id, rpcMsg.Data)
+		responseMsg := RPCMessage{
+			Type: Test,
+			IsNode: true,
+			Sender: network.table.GetMe(),
+			Data: EncodeContacts(network.NodeLookup(id))}
+		responseMsg.SendResponse(conn, addr)
 	}
-
 }
 
 func (network *Network) HandlePingMessage(Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
 	rpcMsg := RPCMessage{
 		Type: Ping,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: Data}
 	rpcMsg.SendResponse(conn, addr)
 }
@@ -145,7 +279,7 @@ func (network *Network) HandleStoreMessage(Data []byte, conn *net.UDPConn, addr 
 	rpcMsg := RPCMessage{
 		Type: Store,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: Data}
 	rpcMsg.SendResponse(conn, addr)
 	//TODO
@@ -158,7 +292,7 @@ func (network *Network) HandleFindNodeMessage(Data []byte, conn *net.UDPConn, ad
 	rpcMsg := RPCMessage{
 		Type: FindNode,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: EncodeContacts(contacts)}
 	rpcMsg.SendResponse(conn, addr)
 }
@@ -167,7 +301,7 @@ func (network *Network) HandleFindValueMessage(Data []byte, conn *net.UDPConn, a
 	rpcMsg := RPCMessage{
 		Type: FindValue,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: Data}
 	rpcMsg.SendResponse(conn, addr)
 	//TODO
@@ -177,7 +311,7 @@ func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAd
 	rpcMsg := RPCMessage{
 		Type: ExitNode,
 		IsNode: true,
-		Sender: network.table.me,
+		Sender: network.table.GetMe(),
 		Data: nil}
 	rpcMsg.SendResponse(conn, addr)
 

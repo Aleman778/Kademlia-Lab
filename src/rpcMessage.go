@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"fmt"
+	"time"
 )
 
 type RPCMessage struct {
@@ -22,11 +23,13 @@ const (
 	Store
 	FindNode
 	FindValue
-    ExitNode
+	ExitNode
+
+	Test
 )
 
 func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "ExitNode"}
+	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "ExitNode", "Test"}
 	if len(rpcType) < int(t) {
 		return ""
 	}
@@ -36,7 +39,7 @@ func (t RPCType) String() string {
 
 
 func (msg RPCMessage) String() string {
-	return "Type: " + msg.Type.String() + "\nID: " + msg.Sender.String() + "\nData: " + string(msg.Data)
+	return "\tType: " + msg.Type.String() + "\n\tID: " + msg.Sender.String()
 }
 
 func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
@@ -61,25 +64,31 @@ func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
 		os.Exit(1)
 	}
 
-	fmt.Println("Sent Msg:\n", rpcMsg.String(), "\n")
+	fmt.Println("Sent Msg to ", udpAddr, " :\n", rpcMsg.String(), "\n")
 
 	return conn
 }
 
 func (rpcMsg RPCMessage) SendResponse(conn *net.UDPConn, address *net.UDPAddr) {
 	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
-	fmt.Println("Sent Msg:\n", rpcMsg.String(), "\n")
+	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String(), "\n")
 }
 
-func GetRPCMessage(conn *net.UDPConn) (RPCMessage, *net.UDPAddr) {
-	inputBytes := make([]byte, 1024)
-	length, addr, _ := conn.ReadFromUDP(inputBytes)
-
+func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.UDPAddr, error) {
 	var rpcMsg RPCMessage
-	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
-	fmt.Println("Recived Msg:\n", rpcMsg.String(), "\n")
+	if timeout > 0 {
+		conn.SetReadDeadline(time.Now().Add(timeout * time.Second))
+	}
+	inputBytes := make([]byte, 1024)
+	length, addr, err := conn.ReadFromUDP(inputBytes)
+	if err != nil {
+		return rpcMsg, nil, err
+	}
 
-	return rpcMsg, addr
+	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
+	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String(), "\n")
+
+	return rpcMsg, addr, nil
 }
 
 func EncodeRPCMessage(rpcMessage RPCMessage) []byte {

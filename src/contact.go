@@ -73,6 +73,30 @@ func (candidates *ContactCandidates) Less(i, j int) bool {
 	return candidates.contacts[i].Less(&candidates.contacts[j])
 }
 
+func (candidates *ContactCandidates) Drop(i int) Contact {
+	contact := candidates.contacts[i]
+	copy(candidates.contacts[i:], candidates.contacts[i+1:])
+	candidates.contacts = candidates.contacts[:len(candidates.contacts)-1]
+	return contact
+}
+
+func (candidates *ContactCandidates) Get(i int) Contact {
+	return candidates.contacts[i]
+}
+
+func (candidates *ContactCandidates) Add(contact Contact) {
+	candidates.contacts = append(candidates.contacts, contact)
+}
+
+func (candidates *ContactCandidates) InCandidates(contact Contact) bool {
+	for _, c := range candidates.contacts {
+		if contact.ID.Equals(c.ID){
+			return true
+		}
+	}
+	return false
+}
+
 func EncodeContacts(contacts []Contact) []byte {
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
