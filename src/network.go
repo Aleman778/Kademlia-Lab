@@ -43,8 +43,23 @@ func (network *Network) Listen(port string) {
 	}
 }
 
-func (network *Network) SendPingMessage(contact *Contact) {
-	// TODO
+func (network *Network) SendPingMessage(contact *Contact) bool {
+	rpcMsg := RPCMessage{
+		Type: Ping,
+		IsNode: true,
+		Sender: network.table.GetMe(),
+		Data: nil}
+
+	conn := rpcMsg.SendTo(contact.Address)
+	defer conn.Close()
+
+	_, _, err := GetRPCMessage(conn, 15)
+	if err != nil {
+		fmt.Println("\nGeting response timeout\n")
+		return false
+	}
+
+	return true
 }
 
 func (network *Network) InitNodeLookup(address string) {
@@ -224,7 +239,7 @@ func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Co
 	}
 
 	if responesMsg.IsNode {
-		network.table.AddContact(responesMsg.Sender)
+		network.AddContact(responesMsg.Sender)
 	}
 
 	var contacts []Contact
@@ -240,7 +255,7 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 	}
 
 	if rpcMsg.IsNode {
-		network.table.AddContact(rpcMsg.Sender)
+		network.AddContact(rpcMsg.Sender)
 	}
 
 	switch rpcMsg.Type {
@@ -317,5 +332,23 @@ func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAd
 
 	fmt.Println("Shutting down server")
 	os.Exit(0);
+}
+
+
+func (network *Network) AddContact(contact Contact) {
+	bucketIndex := network.table.getBucketIndex(contact.ID)
+
+	if network.table.IsBucketFull(bucketIndex) {
+		lastContact := network.table.GetLastInBucket(bucketIndex)
+		isAlive := network.SendPingMessage(&lastContact)
+		if isAlive {
+			return
+		}
+
+		network.table.RemoveContactFromBucket(bucketIndex, lastContact)
+		network.table.AddContact(contact)
+	} else {
+		network.table.AddContact(contact)
+	}
 }
 

@@ -94,3 +94,25 @@ func (routingTable *RoutingTable) GetMe() Contact {
 	return routingTable.me
 }
 
+
+func (routingTable *RoutingTable) IsBucketFull(bucketIndex int) bool {
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
+	return routingTable.buckets[bucketIndex].Full()
+}
+
+func (routingTable *RoutingTable) RemoveContactFromBucket(bucketIndex int, contact Contact) {
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
+	routingTable.buckets[bucketIndex].RemoveContact(contact)
+}
+
+func (routingTable *RoutingTable) GetLastInBucket(bucketIndex int) Contact {
+	routingTable.mutex.Lock()
+	defer routingTable.mutex.Unlock()
+
+	return routingTable.buckets[bucketIndex].GetLast()
+}
+

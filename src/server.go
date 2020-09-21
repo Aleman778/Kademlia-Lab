@@ -19,16 +19,12 @@ func JoinNetwork(address string) {
 
 	network.InitNodeLookup(address)
 
-
 	RunServer(&network)
 }
 
 func RunServer(network *Network) {
 	network.Listen(PORT)
 }
-
-
-
 
 func resolveHostIp() (string) {
 
@@ -51,5 +47,4 @@ func resolveHostIp() (string) {
     }
     return ""
 }
-
 
