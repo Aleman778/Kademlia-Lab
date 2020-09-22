@@ -234,7 +234,7 @@ func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Co
 
 	responesMsg, _, err := GetRPCMessage(conn, 15)
 	if err != nil {
-		fmt.Println("\nGeting response timeout\n")
+		fmt.Println("\nGeting response timeout")
 		return []Contact{}, err
 	}
 

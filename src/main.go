@@ -71,7 +71,7 @@ func main() {
                 return;
             }
             hash := os.Args[argIndex];
-            fmt.Printf("Get data from hash: %s", hash, "\n");
+            fmt.Printf("Get data from hash: %s\n", hash);
             // GetData(hash)
 	    test(hash)
             break;
@@ -176,7 +176,7 @@ func test(hash string) {
 	checkError(err)
 
 	DecodeRPCMessage(&responesMsg, inputBytes[:length])
-	fmt.Println("Recived Msg:\n", responesMsg.String(), "\n")
+	fmt.Println("Recived Msg:\n", responesMsg.String())
 	checkError(err)
 	if responesMsg.Type == Test {
 		var contacts []Contact

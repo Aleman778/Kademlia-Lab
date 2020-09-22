@@ -64,14 +64,14 @@ func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
 		os.Exit(1)
 	}
 
-	fmt.Println("Sent Msg to ", udpAddr, " :\n", rpcMsg.String(), "\n")
+	fmt.Println("Sent Msg to ", udpAddr, " :\n", rpcMsg.String())
 
 	return conn
 }
 
 func (rpcMsg RPCMessage) SendResponse(conn *net.UDPConn, address *net.UDPAddr) {
 	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
-	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String(), "\n")
+	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String())
 }
 
 func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.UDPAddr, error) {
@@ -86,7 +86,7 @@ func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.U
 	}
 
 	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
-	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String(), "\n")
+	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
 
 	return rpcMsg, addr, nil
 }
