@@ -276,8 +276,6 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 		network.HandleFindNodeMessage(&rpcMsg, conn, addr)
 	case FindValue:
 		network.HandleFindValueMessage(&rpcMsg, conn, addr)
-	case ExitNode:
-		network.HandleExitNodeMessage(conn, addr)
 	case CliPut:
 		network.HandleCliPutMessage(conn, addr)
 	case CliGet:
@@ -362,7 +360,7 @@ func (network *Network) HandleCliPutMessage(conn *net.UDPConn, addr *net.UDPAddr
 		Type: CliPut,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: nil}
+		Payload: Payload{"", nil, nil}}
     // TODO: put specific value from the distributed hash table
 	rpcMsg.SendResponse(conn, addr)
 }
@@ -372,7 +370,7 @@ func (network *Network) HandleCliGetMessage(conn *net.UDPConn, addr *net.UDPAddr
 		Type: CliGet,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: nil}
+		Payload: Payload{"", nil, nil}}
     // TODO: get the value given a hash from the distributed hash table
 	rpcMsg.SendResponse(conn, addr)
     

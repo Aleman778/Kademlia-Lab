@@ -157,7 +157,7 @@ func SendMessage(rpcType RPCType, data []byte) {
             break;
 
         case CliGet:
-            fmt.Printf("Data retrieved:\n%s\n", string(response.Data));
+            fmt.Printf("Data retrieved:\n%s\n", string(response.Payload.Data));
             break;
 
         case CliExit:
