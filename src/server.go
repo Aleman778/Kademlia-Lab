@@ -9,13 +9,13 @@ const PORT = ":8080"
 
 func InitServer() {
 	me := NewContact(NewRandomKademliaID(), resolveHostIp())
-	network := Network{NewRoutingTable(me)}
+	network := Network{NewRoutingTable(me), NewStorage()}
 	RunServer(&network)
 }
 
 func JoinNetwork(address string) {
 	me := NewContact(NewRandomKademliaID(), resolveHostIp())
-	network := Network{NewRoutingTable(me)}
+	network := Network{NewRoutingTable(me), NewStorage()}
 
 	network.BootstrapNode(address)
 

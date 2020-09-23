@@ -142,7 +142,7 @@ func SendMessage(rpcType RPCType, data []byte) {
 		Type: rpcType,
 		IsNode: false,
 		Sender: NewContact(NewRandomKademliaID(), "client"),
-		Data: data}
+		Payload: Payload{"", nil, nil}}
 
 	conn := rpcMsg.SendTo("localhost:8080")
 	defer conn.Close()
@@ -157,7 +157,7 @@ func SendMessage(rpcType RPCType, data []byte) {
             break;
 
         case CliGet:
-            fmt.Printf("Data retrieved:\n%s\n", string(response.Data));
+            fmt.Printf("Data retrieved:\n%s\n", string(response.Payload.Data));
             break;
 
         case CliExit:
@@ -170,28 +170,32 @@ func SendMessage(rpcType RPCType, data []byte) {
 }
 
 func test(hash string) {
+    contacts := make([]Contact, 1)
+	contacts[0] = NewContact(NewKademliaID(hash), "")
 	rpcMsg := RPCMessage{
 		Type: Test,
 		IsNode: false,
 		Sender: NewContact(NewRandomKademliaID(), "client"),
-		Data: EncodeKademliaID(*NewKademliaID(hash))}
+		Payload: Payload{
+            Hash: "",
+            Data: nil,
+            Contacts: contacts,}}
 
 	conn := rpcMsg.SendTo("localhost:8080")
 	defer conn.Close()
 
 
-	var responesMsg RPCMessage
+	var responseMsg RPCMessage
 
 	inputBytes := make([]byte, 1024)
 	length, _, err := conn.ReadFromUDP(inputBytes)
 	checkError(err)
 
-	DecodeRPCMessage(&responesMsg, inputBytes[:length])
-	fmt.Println("Recived Msg:\n", responesMsg.String())
+	DecodeRPCMessage(&responseMsg, inputBytes[:length])
+	fmt.Println("Recived Msg:\n", responseMsg.String())
 	checkError(err)
-	if responesMsg.Type == Test {
-		var contacts []Contact
-		DecodeContacts(&contacts, responesMsg.Data)
+	if responseMsg.Type == Test {
+		var contacts []Contact = responseMsg.Payload.Contacts
 		fmt.Println("Contacts: ", contacts);
 	} else {
 		fmt.Println("Error: Expected Test Message");
