@@ -1,1 +1,3 @@
 *.exe
+src/coverage.html
+src/coverage.out
