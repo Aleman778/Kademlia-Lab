@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"math/rand"
+	"crypto/sha1"
 )
 
 // the static number of bytes in a KademliaID
@@ -31,6 +32,16 @@ func NewRandomKademliaID() *KademliaID {
 		newKademliaID[i] = uint8(rand.Intn(256))
 	}
 	return &newKademliaID
+}
+
+func NewHashedID(data string) KademliaID {
+	hash := sha1.Sum([]byte(data))
+
+	newKademliaID := KademliaID{}
+	for i := 0; i < IDLength; i++ {
+		newKademliaID[i] = hash[i]
+	}
+	return newKademliaID
 }
 
 // Less returns true if kademliaID < otherKademliaID (bitwise)

@@ -277,18 +277,11 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 	case FindValue:
 		network.HandleFindValueMessage(&rpcMsg, conn, addr)
 	case CliPut:
-		network.HandleCliPutMessage(conn, addr)
+		network.HandleCliPutMessage(&rpcMsg, conn, addr)
 	case CliGet:
 		network.HandleCliGetMessage(conn, addr)
 	case CliExit:
 		network.HandleCliExitMessage(conn, addr)
-	case Test:
-		responseMsg := RPCMessage{
-			Type: Test,
-			IsNode: true,
-			Sender: network.table.GetMe(),
-			Payload: Payload{"", nil, rpcMsg.Payload.Contacts}}
-		responseMsg.SendResponse(conn, addr)
 	}
 }
 
@@ -307,9 +300,8 @@ func (network *Network) HandleStoreMessage(msg *RPCMessage, conn *net.UDPConn, a
 		IsNode: true,
 		Sender: network.table.GetMe(),
 		Payload: Payload{"", nil, nil}}
-	rpcMsg.SendResponse(conn, addr)
-
 	network.storage.Store(msg.Payload.Hash, msg.Payload.Data)
+	rpcMsg.SendResponse(conn, addr)
 }
 
 func (network *Network) HandleFindNodeMessage(msg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
@@ -355,14 +347,30 @@ func (network *Network) HandleFindValueMessage(msg *RPCMessage, conn *net.UDPCon
 	}
 }
 
-func (network *Network) HandleCliPutMessage(conn *net.UDPConn, addr *net.UDPAddr) {
-	rpcMsg := RPCMessage{
+func (network *Network) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
+	id := NewHashedID(rpcMsg.Payload.Hash)
+	closest := network.NodeLookup(id)
+	for _, c := range closest {
+		go func(address string) {
+			rpcMsg := RPCMessage{
+				Type: Store,
+				IsNode: true,
+				Sender: network.table.GetMe(),
+				Payload: Payload {
+					Hash: string(rpcMsg.Payload.Hash),
+					Data: rpcMsg.Payload.Data,
+					Contacts: nil,
+				}}
+			conn := rpcMsg.SendTo(address)
+			defer conn.Close()
+		}(c.Address)
+	}
+	response := RPCMessage{
 		Type: CliPut,
 		IsNode: true,
 		Sender: network.table.GetMe(),
 		Payload: Payload{"", nil, nil}}
-    // TODO: put specific value from the distributed hash table
-	rpcMsg.SendResponse(conn, addr)
+	response.SendResponse(conn, addr)
 }
 
 func (network *Network) HandleCliGetMessage(conn *net.UDPConn, addr *net.UDPAddr) {
@@ -373,7 +381,6 @@ func (network *Network) HandleCliGetMessage(conn *net.UDPConn, addr *net.UDPAddr
 		Payload: Payload{"", nil, nil}}
     // TODO: get the value given a hash from the distributed hash table
 	rpcMsg.SendResponse(conn, addr)
-    
 }
 
 func (network *Network) HandleCliExitMessage(conn *net.UDPConn, addr *net.UDPAddr) {

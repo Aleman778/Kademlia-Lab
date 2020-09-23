@@ -59,8 +59,9 @@ func main() {
                 fmt.Printf("%s\n", PUT_HELP_STRING);
                 return;
             }
-            data := []byte(strings.Join(os.Args[argIndex:], " "));
-            SendMessage(CliPut, data);
+	    data := strings.Join(os.Args[argIndex:], " ")
+	    payload := Payload{data, []byte(data), nil}
+            SendMessage(CliPut, payload);
             break;
         case "get":
             if len(os.Args) != argIndex + 1 || *showHelp {
@@ -71,9 +72,9 @@ func main() {
             }
 
             hash := os.Args[argIndex];
+	    payload := Payload{string(hash), nil, nil}
             fmt.Printf("Get data from hash: %s", hash);
-            SendMessage(CliGet, []byte(hash));
-            test(hash);
+            SendMessage(CliGet, payload);
             break;
 
         case "join":
@@ -105,7 +106,8 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-            SendMessage(CliExit, []byte(nil));
+	    payload := Payload{"", nil, nil}
+            SendMessage(CliExit, payload);
             break;
         default:
             fmt.Printf("\nInvalid command '%s' was found\n", command);
@@ -137,71 +139,37 @@ func main() {
 }
 
 
-func SendMessage(rpcType RPCType, data []byte) {
+func SendMessage(rpcType RPCType, payload Payload) {
 	rpcMsg := RPCMessage{
 		Type: rpcType,
 		IsNode: false,
 		Sender: NewContact(NewRandomKademliaID(), "client"),
-		Payload: Payload{"", nil, nil}}
+		Payload: payload}
 
 	conn := rpcMsg.SendTo("localhost:8080")
 	defer conn.Close()
 
 
 	response, _, err := GetRPCMessage(conn, 0)
-    checkError(err)
+	checkError(err)
+
 	if response.Type == rpcType {
-        switch (rpcType) {
-        case CliPut:
-            fmt.Println("Data has been stored.");
-            break;
-
-        case CliGet:
-            fmt.Printf("Data retrieved:\n%s\n", string(response.Payload.Data));
-            break;
-
-        case CliExit:
-            fmt.Println("Node has been terminated");
-            break;
-        }
-    } else {
+		switch (rpcType) {
+		case CliPut:
+		    fmt.Println("Data has been stored.");
+		    break;
+		case CliGet:
+		    fmt.Printf("Data retrieved:\n%s\n", string(response.Payload.Data));
+		    break;
+		case CliExit:
+		    fmt.Println("Node has been terminated");
+		    break;
+		}
+	} else {
 		fmt.Println("Failed to contact local server, start server using \"kademlia serve\"");
 	}
 }
 
-func test(hash string) {
-    contacts := make([]Contact, 1)
-	contacts[0] = NewContact(NewKademliaID(hash), "")
-	rpcMsg := RPCMessage{
-		Type: Test,
-		IsNode: false,
-		Sender: NewContact(NewRandomKademliaID(), "client"),
-		Payload: Payload{
-            Hash: "",
-            Data: nil,
-            Contacts: contacts,}}
-
-	conn := rpcMsg.SendTo("localhost:8080")
-	defer conn.Close()
-
-
-	var responseMsg RPCMessage
-
-	inputBytes := make([]byte, 1024)
-	length, _, err := conn.ReadFromUDP(inputBytes)
-	checkError(err)
-
-	DecodeRPCMessage(&responseMsg, inputBytes[:length])
-	fmt.Println("Recived Msg:\n", responseMsg.String())
-	checkError(err)
-	if responseMsg.Type == Test {
-		var contacts []Contact = responseMsg.Payload.Contacts
-		fmt.Println("Contacts: ", contacts);
-	} else {
-		fmt.Println("Error: Expected Test Message");
-	}
-
-}
 
 func checkError(err error) {
 	if err != nil {
