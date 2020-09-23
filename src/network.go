@@ -261,14 +261,12 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 	case ExitNode:
 		network.HandleExitNodeMessage(conn, addr)
 	case Test:
-		/*var id KademliaID
-		DecodeKademliaID(&id, rpcMsg.Data)
 		responseMsg := RPCMessage{
 			Type: Test,
 			IsNode: true,
 			Sender: network.table.GetMe(),
-			Data: EncodeContacts(network.NodeLookup(id))}
-		responseMsg.SendResponse(conn, addr)*/
+			Payload: Payload{"", nil, rpcMsg.Payload.Contacts}}
+		responseMsg.SendResponse(conn, addr)
 	}
 }
 
