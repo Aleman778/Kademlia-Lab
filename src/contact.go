@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"sort"
-	"bytes"
-	"encoding/gob"
 )
 
 // Contact definition
@@ -96,19 +94,3 @@ func (candidates *ContactCandidates) InCandidates(contact Contact) bool {
 	}
 	return false
 }
-
-func EncodeContacts(contacts []Contact) []byte {
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	err := encoder.Encode(contacts)
-	checkError(err)
-	return buffer.Bytes()
-}
-
-func DecodeContacts(contacts *[]Contact, data []byte) {
-	buffer := bytes.NewBuffer(data)
-	decoder := gob.NewDecoder(buffer)
-	err := decoder.Decode(contacts)
-	checkError(err)
-}
-

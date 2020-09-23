@@ -13,7 +13,13 @@ type RPCMessage struct {
 	Type RPCType
 	IsNode bool
 	Sender Contact
+	Payload Payload
+}
+
+type Payload struct {
+	Hash string
 	Data []byte
+	Contacts []Contact
 }
 
 type RPCType int

@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"crypto/sha1"
-	"encoding/gob"
 )
 
 const k = 5
@@ -13,19 +12,7 @@ const ALPHA = 3
 
 type Network struct {
 	table *RoutingTable
-}
-
-type Rpc int
-
-const (
-	findData Rpc = iota
-	sendData
-)
-
-type MSG struct {
-	Msg Rpc
-	Data []byte
-	Me Contact
+	storage *Storage
 }
 
 func (network *Network) Listen(port string) {
@@ -48,14 +35,14 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
 		Type: Ping,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: nil}
+		Payload: Payload{"", nil, nil}}
 
 	conn := rpcMsg.SendTo(contact.Address)
 	defer conn.Close()
 
 	_, _, err := GetRPCMessage(conn, 15)
 	if err != nil {
-		fmt.Println("\nGeting response timeout\n")
+		fmt.Println("\nGeting response timeout")
 		return false
 	}
 
@@ -185,14 +172,17 @@ func (network *Network) SendFindDataMessage(hash string) {
 
 	for _, contact := range closest {
 		go func(address string) {
-			conn, err := net.Dial("udp4", address)
+			rpcMsg := RPCMessage{
+				Type: FindValue,
+				IsNode: true,
+				Sender: network.table.GetMe(),
+				Payload: Payload {
+					Hash: hash,
+					Data: nil,
+					Contacts: nil,
+				}}
+			conn := rpcMsg.SendTo(address)
 			defer conn.Close()
-			if err != nil {
-				fmt.Errorf("Error in SendFindDataMessage: %v", err)
-			} else {
-				msg := []byte("FINDD\n")
-				conn.Write(msg)
-			}
 		}(contact.Address)
 	}
 }
@@ -204,47 +194,48 @@ func (network *Network) SendStoreMessage(data []byte) {
 
 	for _, contact := range closest {
 		go func(address string) {
-			conn, err := net.Dial("udp4", address) //This might go outside go func
+			rpcMsg := RPCMessage{
+				Type: Store,
+				IsNode: true,
+				Sender: network.table.GetMe(),
+				Payload: Payload {
+					Hash: string(hash[:]),
+					Data: data,
+					Contacts: nil,
+				}}
+			conn := rpcMsg.SendTo(address)
 			defer conn.Close()
-			if err != nil {
-				fmt.Errorf("Error in net.Dial: %v", err)
-			} else {
-				msg := MSG{sendData, data, network.table.GetMe()}
-				enc := gob.NewEncoder(conn)
-				err := enc.Encode(msg)
-				if err != nil {
-					fmt.Errorf("Error in enc.Encode: %v", err)
-				}
-			}
 		}(contact.Address)
 	}
 }
 
-
-
 func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Contact, error) {
+	contacts := make([]Contact, 1)
+	contacts[0] = NewContact(&id, "")
 	rpcMsg := RPCMessage{
 		Type: FindNode,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: EncodeKademliaID(id)}
+		Payload: Payload{
+			Hash: "",
+			Data: nil,
+			Contacts: contacts,
+		}}
 
 	conn := rpcMsg.SendTo(addr)
 	defer conn.Close()
 
-	responesMsg, _, err := GetRPCMessage(conn, 15)
+	responseMsg, _, err := GetRPCMessage(conn, 15)
 	if err != nil {
 		fmt.Println("\nGeting response timeout")
 		return []Contact{}, err
 	}
 
-	if responesMsg.IsNode {
-		network.AddContact(responesMsg.Sender)
+	if responseMsg.IsNode {
+		network.AddContact(responseMsg.Sender)
 	}
 
-	var contacts []Contact
-	DecodeContacts(&contacts, responesMsg.Data)
-	return contacts, nil
+	return responseMsg.Payload.Contacts, nil
 }
 
 func (network *Network) HandleClient(conn *net.UDPConn) {
@@ -260,66 +251,88 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 
 	switch rpcMsg.Type {
 	case Ping:
-		network.HandlePingMessage(rpcMsg.Data, conn, addr)
+		network.HandlePingMessage(conn, addr)
 	case Store:
-		network.HandleStoreMessage(rpcMsg.Data, conn, addr)
+		network.HandleStoreMessage(&rpcMsg, conn, addr)
 	case FindNode:
-		network.HandleFindNodeMessage(rpcMsg.Data, conn, addr)
+		network.HandleFindNodeMessage(&rpcMsg, conn, addr)
 	case FindValue:
-		network.HandleFindValueMessage(rpcMsg.Data, conn, addr)
+		network.HandleFindValueMessage(&rpcMsg, conn, addr)
 	case ExitNode:
 		network.HandleExitNodeMessage(conn, addr)
 	case Test:
-		var id KademliaID
+		/*var id KademliaID
 		DecodeKademliaID(&id, rpcMsg.Data)
 		responseMsg := RPCMessage{
 			Type: Test,
 			IsNode: true,
 			Sender: network.table.GetMe(),
 			Data: EncodeContacts(network.NodeLookup(id))}
-		responseMsg.SendResponse(conn, addr)
+		responseMsg.SendResponse(conn, addr)*/
 	}
 }
 
-func (network *Network) HandlePingMessage(Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+func (network *Network) HandlePingMessage(conn *net.UDPConn, addr *net.UDPAddr) {
 	rpcMsg := RPCMessage{
 		Type: Ping,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: Data}
+		Payload: Payload{"",nil,nil,}}
 	rpcMsg.SendResponse(conn, addr)
 }
 
-func (network *Network) HandleStoreMessage(Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
+func (network *Network) HandleStoreMessage(msg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
 	rpcMsg := RPCMessage{
 		Type: Store,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: Data}
+		Payload: Payload{"", nil, nil}}
 	rpcMsg.SendResponse(conn, addr)
-	//TODO
+
+	network.storage.Store(msg.Payload.Hash, msg.Payload.Data)
 }
 
-func (network *Network) HandleFindNodeMessage(Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
-	var id KademliaID
-	DecodeKademliaID(&id, Data)
+func (network *Network) HandleFindNodeMessage(msg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
+	var id KademliaID = *msg.Payload.Contacts[0].ID
 	contacts := network.table.FindClosestContacts(&id, k)
 	rpcMsg := RPCMessage{
 		Type: FindNode,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: EncodeContacts(contacts)}
+		Payload: Payload{
+			Hash: "",
+			Data: nil,
+			Contacts: contacts,
+		}}
 	rpcMsg.SendResponse(conn, addr)
 }
 
-func (network *Network) HandleFindValueMessage(Data []byte, conn *net.UDPConn, addr *net.UDPAddr) {
-	rpcMsg := RPCMessage{
-		Type: FindValue,
-		IsNode: true,
-		Sender: network.table.GetMe(),
-		Data: Data}
-	rpcMsg.SendResponse(conn, addr)
-	//TODO
+func (network *Network) HandleFindValueMessage(msg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
+	if val, ok := network.storage.Load(msg.Payload.Hash); ok {
+		rpcMsg := RPCMessage{
+			Type: FindValue,
+			IsNode: true,
+			Sender: network.table.GetMe(),
+			Payload: Payload{
+				Hash: msg.Payload.Hash,
+				Data: val,
+				Contacts: nil,
+			}}
+			rpcMsg.SendResponse(conn, addr)
+	} else {
+		hashID := NewKademliaID(msg.Payload.Hash)
+		closest := network.table.FindClosestContacts(hashID, k)
+		rpcMsg := RPCMessage{
+			Type: FindValue,
+			IsNode: true,
+			Sender: network.table.GetMe(),
+			Payload: Payload{
+				Hash: "",
+				Data: nil,
+				Contacts: closest,
+			}}
+		rpcMsg.SendResponse(conn, addr)
+	}
 }
 
 func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAddr) {
@@ -327,7 +340,7 @@ func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAd
 		Type: ExitNode,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Data: nil}
+		Payload: Payload{"", nil, nil}}
 	rpcMsg.SendResponse(conn, addr)
 
 	fmt.Println("Shutting down server")
