@@ -1,6 +1,7 @@
 package main
 
 import (
+    "sort"
 	"sync"
 )
 
@@ -37,9 +38,17 @@ func (routingTable *RoutingTable) AddContact(contact Contact) {
 	bucket.AddContact(contact)
 }
 
+
+// Sort by contacts distance to each other, in ascending order.
+type ByDistance []Contact
+func (a ByDistance) Len() int           { return len(a) }
+func (a ByDistance) Less(i, j int) bool { return a[i].distance.Less(a[j].distance) }
+func (a ByDistance) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+
 // FindClosestContacts finds the count closest Contacts to the target in the RoutingTable
 func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count int) []Contact {
-	var candidates ContactCandidates
+	var candidates []Contact
 	bucketIndex := routingTable.getBucketIndex(target)
 
 	routingTable.mutex.Lock()
@@ -47,26 +56,26 @@ func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count 
 
 	bucket := routingTable.buckets[bucketIndex]
 
-	candidates.Append(bucket.GetContactAndCalcDistance(target))
+	candidates = append(candidates, bucket.GetContactAndCalcDistance(target)...)
 
-	for i := 1; (bucketIndex-i >= 0 || bucketIndex+i < IDLength*8) && candidates.Len() < count; i++ {
+	for i := 1; (bucketIndex-i >= 0 || bucketIndex+i < IDLength*8) && len(candidates) < count; i++ {
 		if bucketIndex-i >= 0 {
 			bucket = routingTable.buckets[bucketIndex-i]
-			candidates.Append(bucket.GetContactAndCalcDistance(target))
+			candidates = append(candidates, bucket.GetContactAndCalcDistance(target)...)
 		}
 		if bucketIndex+i < IDLength*8 {
 			bucket = routingTable.buckets[bucketIndex+i]
-			candidates.Append(bucket.GetContactAndCalcDistance(target))
+			candidates = append(candidates, bucket.GetContactAndCalcDistance(target)...)
 		}
 	}
 
-	candidates.Sort()
+	sort.Sort(ByDistance(candidates))
 
-	if count > candidates.Len() {
-		count = candidates.Len()
+	if count > len(candidates) {
+		count = len(candidates)
 	}
 
-	return candidates.GetContacts(count)
+	return candidates[:count]
 }
 
 // getBucketIndex get the correct Bucket index for the KademliaID
