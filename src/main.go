@@ -59,9 +59,8 @@ func main() {
                 fmt.Printf("%s\n", PUT_HELP_STRING);
                 return;
             }
-            data := strings.Join(os.Args[argIndex:], " ");
-            fmt.Printf("Put data: %s", data);
-            // StoreData(data);
+            data := []byte(strings.Join(os.Args[argIndex:], " "));
+            SendMessage(CliPut, data);
             break;
         case "get":
             if len(os.Args) != argIndex + 1 || *showHelp {
@@ -70,10 +69,11 @@ func main() {
                 fmt.Printf("%s\n", GET_HELP_STRING);
                 return;
             }
+
             hash := os.Args[argIndex];
-            fmt.Printf("Get data from hash: %s\n", hash);
-            // GetData(hash)
-	    test(hash)
+            fmt.Printf("Get data from hash: %s", hash);
+            SendMessage(CliGet, []byte(hash));
+            test(hash);
             break;
 
         case "join":
@@ -84,7 +84,7 @@ func main() {
                 return;
             }
             address := os.Args[argIndex];
-            fmt.Printf("Join node with address: %s", address);
+            fmt.Printf("Join node with address: %s\n", address);
             JoinNetwork(address);
 
         case "serve":
@@ -105,7 +105,7 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-            SendExitNode("localhost:8080");
+            SendMessage(CliExit, []byte(nil));
             break;
         default:
             fmt.Printf("\nInvalid command '%s' was found\n", command);
@@ -137,24 +137,35 @@ func main() {
 }
 
 
-
-
-func SendExitNode(service string) {
+func SendMessage(rpcType RPCType, data []byte) {
 	rpcMsg := RPCMessage{
-		Type: ExitNode,
+		Type: rpcType,
 		IsNode: false,
 		Sender: NewContact(NewRandomKademliaID(), "client"),
 		Payload: Payload{"", nil, nil}}
 
-	conn := rpcMsg.SendTo(service)
+	conn := rpcMsg.SendTo("localhost:8080")
 	defer conn.Close()
 
-	responesMsg, _, err := GetRPCMessage(conn, 0)
-	checkError(err)
-	if responesMsg.Type == ExitNode {
-		fmt.Println("Node has been terminated");
-	} else {
-		fmt.Println("Error: Expected ExitNode Message");
+
+	response, _, err := GetRPCMessage(conn, 0)
+    checkError(err)
+	if response.Type == rpcType {
+        switch (rpcType) {
+        case CliPut:
+            fmt.Println("Data has been stored.");
+            break;
+
+        case CliGet:
+            fmt.Printf("Data retrieved:\n%s\n", string(response.Data));
+            break;
+
+        case CliExit:
+            fmt.Println("Node has been terminated");
+            break;
+        }
+    } else {
+		fmt.Println("Failed to contact local server, start server using \"kademlia serve\"");
 	}
 }
 

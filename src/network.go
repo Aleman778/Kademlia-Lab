@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+    "time"
 	"net"
 	"os"
+    "sort"
 	"crypto/sha1"
 )
 
@@ -30,6 +32,23 @@ func (network *Network) Listen(port string) {
 	}
 }
 
+func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.UDPAddr, error) {
+	var rpcMsg RPCMessage
+	if timeout > 0 {
+		conn.SetReadDeadline(time.Now().Add(timeout * time.Second))
+	}
+	inputBytes := make([]byte, 1024)
+	length, addr, err := conn.ReadFromUDP(inputBytes)
+	if err != nil {
+		return rpcMsg, nil, err
+	}
+
+	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
+	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
+
+	return rpcMsg, addr, nil
+}
+
 func (network *Network) SendPingMessage(contact *Contact) bool {
 	rpcMsg := RPCMessage{
 		Type: Ping,
@@ -49,42 +68,41 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
 	return true
 }
 
-func (network *Network) InitNodeLookup(address string) {
-	var called ContactCandidates
+func (network *Network) BootstrapNode(address string) {
+	var called []Contact
 	me := network.table.GetMe()
 	me.CalcDistance(me.ID)
-	called.Add(me)
+	called = append(called, me)
 
-	var notCalled ContactCandidates
+	var notCalled []Contact
 	contacts, err := network.SendFindContactMessage(address, *me.ID)
 	checkError(err)
 
 	for _, contact := range contacts {
-		if !notCalled.InCandidates(contact) && !called.InCandidates(contact) {
+		if !InCandidates(notCalled, contact) && !InCandidates(called, contact) {
 			contact.CalcDistance(me.ID)
-			notCalled.Add(contact)
+			notCalled = append(notCalled, contact)
 		}
 	}
 
-	notCalled.Sort()
-
+	sort.Sort(ByDistance(notCalled))
 	network.HandleNodeLookupGoRoutines(*me.ID, called, notCalled)
 }
 
 func (network *Network) NodeLookup(id KademliaID) []Contact {
-	var called ContactCandidates
+	var called []Contact
 	me := network.table.GetMe()
 	me.CalcDistance(&id)
-	called.Add(me)
+	called = append(called, me)
 
-	var notCalled ContactCandidates
-	notCalled.Append(network.table.FindClosestContacts(&id, k))
-	notCalled.Sort()
+	var notCalled []Contact
+	notCalled = append(notCalled, network.table.FindClosestContacts(&id, k)...)
+	sort.Sort(ByDistance(notCalled))
 
 	return network.HandleNodeLookupGoRoutines(id, called, notCalled)
 }
 
-func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called ContactCandidates, notCalled ContactCandidates) []Contact {
+func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called []Contact, notCalled []Contact) []Contact {
 	readCh := make(chan []Contact)
 	defer close(readCh)
 
@@ -97,23 +115,23 @@ func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called Contact
 	// Start ALPHA GoRoutines
 	for i := 0; i < ALPHA; i++ {
 		go network.NodeLookupGoRoutine(id, readCh, writeCh)
-		if notCalled.Len() > 0 {
+		if len(notCalled) > 0 {
 			numNotRunning -= 1
-			contact := notCalled.Drop(0)
-			called.Add(contact)
+            var contact Contact
+			notCalled, contact = PopCandidate(notCalled)
+			called = append(called, contact)
 			writeCh <- contact
 		}
 	}
-	called.Sort()
-
+    sort.Sort(ByDistance(called))
 
 	for {
 		if numNotRunning == ALPHA {
-			length := called.Len()
+			length := len(called)
 			if length < k {
-				return called.GetContacts(length)
+				return called
 			}
-			return called.GetContacts(k)
+			return called[:k]
 		}
 
 		// Get contacts from one of the GoRoutines respones messages
@@ -122,29 +140,29 @@ func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called Contact
 
 		// Add uncontacted nodes to the notCalled list.
 		for _, contact := range contacts {
-			if !notCalled.InCandidates(contact) && !called.InCandidates(contact) {
+			if !InCandidates(notCalled, contact) && !InCandidates(called, contact) {
 				contact.CalcDistance(&id)
-				notCalled.Add(contact)
+				notCalled = append(notCalled, contact)
 			}
 		}
-		notCalled.Sort()
-
+        sort.Sort(ByDistance(notCalled))
 
 		// Make all not running GoRoutines send findnode rpc if there are any uncontacted contacts
 		for {
-			if notCalled.Len() != 0 && called.Len() >= k  {
-				isDone = called.Get(k-1).distance.Less(notCalled.Get(0).distance)
+			if len(notCalled) != 0 && len(called) >= k  {
+				isDone = called[k-1].distance.Less(notCalled[0].distance)
 			}
 
-			if numNotRunning < 1 || notCalled.Len() == 0 || isDone {
+			if numNotRunning < 1 || len(notCalled) == 0 || isDone {
 				break
 			}
 			numNotRunning -= 1
-			contact := notCalled.Drop(0)
-			called.Add(contact)
+            var contact Contact
+			notCalled, contact = PopCandidate(notCalled)
+			called = append(called, contact)
 			writeCh <- contact
 		}
-		called.Sort()
+        sort.Sort(ByDistance(called))
 	}
 }
 
@@ -260,6 +278,12 @@ func (network *Network) HandleClient(conn *net.UDPConn) {
 		network.HandleFindValueMessage(&rpcMsg, conn, addr)
 	case ExitNode:
 		network.HandleExitNodeMessage(conn, addr)
+	case CliPut:
+		network.HandleCliPutMessage(conn, addr)
+	case CliGet:
+		network.HandleCliGetMessage(conn, addr)
+	case CliExit:
+		network.HandleCliExitMessage(conn, addr)
 	case Test:
 		responseMsg := RPCMessage{
 			Type: Test,
@@ -333,9 +357,30 @@ func (network *Network) HandleFindValueMessage(msg *RPCMessage, conn *net.UDPCon
 	}
 }
 
-func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAddr) {
+func (network *Network) HandleCliPutMessage(conn *net.UDPConn, addr *net.UDPAddr) {
 	rpcMsg := RPCMessage{
-		Type: ExitNode,
+		Type: CliPut,
+		IsNode: true,
+		Sender: network.table.GetMe(),
+		Data: nil}
+    // TODO: put specific value from the distributed hash table
+	rpcMsg.SendResponse(conn, addr)
+}
+
+func (network *Network) HandleCliGetMessage(conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: CliGet,
+		IsNode: true,
+		Sender: network.table.GetMe(),
+		Data: nil}
+    // TODO: get the value given a hash from the distributed hash table
+	rpcMsg.SendResponse(conn, addr)
+    
+}
+
+func (network *Network) HandleCliExitMessage(conn *net.UDPConn, addr *net.UDPAddr) {
+	rpcMsg := RPCMessage{
+		Type: CliExit,
 		IsNode: true,
 		Sender: network.table.GetMe(),
 		Payload: Payload{"", nil, nil}}
@@ -344,7 +389,6 @@ func (network *Network) HandleExitNodeMessage(conn *net.UDPConn, addr *net.UDPAd
 	fmt.Println("Shutting down server")
 	os.Exit(0);
 }
-
 
 func (network *Network) AddContact(contact Contact) {
 	bucketIndex := network.table.getBucketIndex(contact.ID)

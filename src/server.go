@@ -17,7 +17,7 @@ func JoinNetwork(address string) {
 	me := NewContact(NewRandomKademliaID(), resolveHostIp())
 	network := Network{NewRoutingTable(me), NewStorage()}
 
-	network.InitNodeLookup(address)
+	network.BootstrapNode(address)
 
 	RunServer(&network)
 }

@@ -23,71 +23,20 @@ func (contact *Contact) CalcDistance(target *KademliaID) {
 	contact.distance = contact.ID.CalcDistance(target)
 }
 
-// Less returns true if contact.distance < otherContact.distance
-func (contact *Contact) Less(otherContact *Contact) bool {
-	return contact.distance.Less(otherContact.distance)
-}
-
 // String returns a simple string representation of a Contact
 func (contact *Contact) String() string {
 	return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
 }
 
-// ContactCandidates definition
-// stores an array of Contacts
-type ContactCandidates struct {
-	contacts []Contact
+func PopCandidate(candidates []Contact) ([]Contact, Contact) {
+	contact := candidates[0]
+	copy(candidates, candidates[1:])
+	candidates = candidates[:len(candidates)-1]
+	return candidates, contact
 }
 
-// Append an array of Contacts to the ContactCandidates
-func (candidates *ContactCandidates) Append(contacts []Contact) {
-	candidates.contacts = append(candidates.contacts, contacts...)
-}
-
-// GetContacts returns the first count number of Contacts
-func (candidates *ContactCandidates) GetContacts(count int) []Contact {
-	return candidates.contacts[:count]
-}
-
-// Sort the Contacts in ContactCandidates
-func (candidates *ContactCandidates) Sort() {
-	sort.Sort(candidates)
-}
-
-// Len returns the length of the ContactCandidates
-func (candidates *ContactCandidates) Len() int {
-	return len(candidates.contacts)
-}
-
-// Swap the position of the Contacts at i and j
-// WARNING does not check if either i or j is within range
-func (candidates *ContactCandidates) Swap(i, j int) {
-	candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
-}
-
-// Less returns true if the Contact at index i is smaller than 
-// the Contact at index j
-func (candidates *ContactCandidates) Less(i, j int) bool {
-	return candidates.contacts[i].Less(&candidates.contacts[j])
-}
-
-func (candidates *ContactCandidates) Drop(i int) Contact {
-	contact := candidates.contacts[i]
-	copy(candidates.contacts[i:], candidates.contacts[i+1:])
-	candidates.contacts = candidates.contacts[:len(candidates.contacts)-1]
-	return contact
-}
-
-func (candidates *ContactCandidates) Get(i int) Contact {
-	return candidates.contacts[i]
-}
-
-func (candidates *ContactCandidates) Add(contact Contact) {
-	candidates.contacts = append(candidates.contacts, contact)
-}
-
-func (candidates *ContactCandidates) InCandidates(contact Contact) bool {
-	for _, c := range candidates.contacts {
+func InCandidates(candidates []Contact, contact Contact) bool {
+	for _, c := range candidates {
 		if contact.ID.Equals(c.ID){
 			return true
 		}

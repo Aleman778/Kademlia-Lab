@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"fmt"
-	"time"
 )
 
 type RPCMessage struct {
@@ -29,13 +28,14 @@ const (
 	Store
 	FindNode
 	FindValue
-	ExitNode
-
+    CliPut
+    CliGet
+    CliExit
 	Test
 )
 
 func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "ExitNode", "Test"}
+	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "CliPut", "CliGet", "CliExit", "Test"}
 	if len(rpcType) < int(t) {
 		return ""
 	}
@@ -78,23 +78,6 @@ func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
 func (rpcMsg RPCMessage) SendResponse(conn *net.UDPConn, address *net.UDPAddr) {
 	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
 	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String())
-}
-
-func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.UDPAddr, error) {
-	var rpcMsg RPCMessage
-	if timeout > 0 {
-		conn.SetReadDeadline(time.Now().Add(timeout * time.Second))
-	}
-	inputBytes := make([]byte, 1024)
-	length, addr, err := conn.ReadFromUDP(inputBytes)
-	if err != nil {
-		return rpcMsg, nil, err
-	}
-
-	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
-	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
-
-	return rpcMsg, addr, nil
 }
 
 func EncodeRPCMessage(rpcMessage RPCMessage) []byte {
