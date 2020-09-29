@@ -25,14 +25,14 @@ func (network *Network) Listen(port string) {
 	checkError(err)
 	defer conn.Close()
 
-	fmt.Println("Sever setup finished")
+	fmt.Println("Server setup finished")
 
 	for {
 		network.HandleClient(conn)
 	}
 }
 
-func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.UDPAddr, error) {
+func GetRPCMessage(conn *net.UDPConn, timeout time.Duration, verbose bool) (RPCMessage, *net.UDPAddr, error) {
 	var rpcMsg RPCMessage
 	if timeout > 0 {
 		conn.SetReadDeadline(time.Now().Add(timeout * time.Second))
@@ -44,7 +44,9 @@ func GetRPCMessage(conn *net.UDPConn, timeout time.Duration) (RPCMessage, *net.U
 	}
 
 	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
-	fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
+    if verbose {
+        fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
+    }
 
 	return rpcMsg, addr, nil
 }
@@ -56,10 +58,10 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
 		Sender: network.table.GetMe(),
 		Payload: Payload{"", nil, nil}}
 
-	conn := rpcMsg.SendTo(contact.Address)
+	conn := rpcMsg.SendTo(contact.Address, true)
 	defer conn.Close()
 
-	_, _, err := GetRPCMessage(conn, 15)
+	_, _, err := GetRPCMessage(conn, 15, true)
 	if err != nil {
 		fmt.Println("\nGeting response timeout")
 		return false
@@ -199,7 +201,7 @@ func (network *Network) SendFindDataMessage(hash string) {
 					Data: nil,
 					Contacts: nil,
 				}}
-			conn := rpcMsg.SendTo(address)
+			conn := rpcMsg.SendTo(address, true)
 			defer conn.Close()
 		}(contact.Address)
 	}
@@ -221,7 +223,7 @@ func (network *Network) SendStoreMessage(data []byte) {
 					Data: data,
 					Contacts: nil,
 				}}
-			conn := rpcMsg.SendTo(address)
+			conn := rpcMsg.SendTo(address, true)
 			defer conn.Close()
 		}(contact.Address)
 	}
@@ -240,10 +242,10 @@ func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Co
 			Contacts: contacts,
 		}}
 
-	conn := rpcMsg.SendTo(addr)
+	conn := rpcMsg.SendTo(addr, true)
 	defer conn.Close()
 
-	responseMsg, _, err := GetRPCMessage(conn, 15)
+	responseMsg, _, err := GetRPCMessage(conn, 15, true)
 	if err != nil {
 		fmt.Println("\nGeting response timeout")
 		return []Contact{}, err
@@ -257,7 +259,7 @@ func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Co
 }
 
 func (network *Network) HandleClient(conn *net.UDPConn) {
-	rpcMsg, addr, err := GetRPCMessage(conn, 0)
+	rpcMsg, addr, err := GetRPCMessage(conn, 0, true)
 
 	if err != nil {
 		return
@@ -361,7 +363,7 @@ func (network *Network) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPCon
 					Data: rpcMsg.Payload.Data,
 					Contacts: nil,
 				}}
-			conn := rpcMsg.SendTo(address)
+			conn := rpcMsg.SendTo(address, true)
 			defer conn.Close()
 		}(c.Address)
 	}

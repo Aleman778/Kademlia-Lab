@@ -21,14 +21,13 @@ const SERVE_HELP_STRING string = "Usage:  kademlia serve\n\n" +
 const EXIT_HELP_STRING string  = "Usage:  kademlia kill\n\n" +
                                  "Kills the currently running kademlia node"
 
-
 func main() {
     rand.Seed(time.Now().UTC().UnixNano())
 
     // Setup CLI arguments
-    showVersion := flag.Bool("-version", false, "Print version number and quit");
+    showVersion := flag.Bool("version", false, "Print version number and quit");
     showV := flag.Bool("v", false, "Print version number and quit");
-    showHelp := flag.Bool("-help", false, "Show help information");
+    showHelp := flag.Bool("help", false, "Show help information");
 
     // Filter CLI command from args, for some reason golang flags fails if there are commands in the arguments.
     command := "";
@@ -59,8 +58,12 @@ func main() {
                 fmt.Printf("%s\n", PUT_HELP_STRING);
                 return;
             }
-	    data := strings.Join(os.Args[argIndex:], " ")
-	    payload := Payload{data, []byte(data), nil}
+            data := strings.Join(os.Args[argIndex:], " ")
+            if len(data) > 255 {
+                fmt.Printf("\nCan't send data that is longer than 255 characters (got %d characters).\n", len(data))
+                os.Exit(1)
+            }
+            payload := Payload{data, []byte(data), nil}
             SendMessage(CliPut, payload);
             break;
         case "get":
@@ -72,8 +75,7 @@ func main() {
             }
 
             hash := os.Args[argIndex];
-	    payload := Payload{string(hash), nil, nil}
-            fmt.Printf("Get data from hash: %s", hash);
+            payload := Payload{string(hash), nil, nil}
             SendMessage(CliGet, payload);
             break;
 
@@ -85,7 +87,7 @@ func main() {
                 return;
             }
             address := os.Args[argIndex];
-            fmt.Printf("Join node with address: %s\n", address);
+            fmt.Printf("\nJoin node with address: %s\n", address);
             JoinNetwork(address);
 
         case "serve":
@@ -96,6 +98,7 @@ func main() {
                 return;
             }
 
+            fmt.Print("\n");
             InitServer();
             break;
 
@@ -106,7 +109,7 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-	    payload := Payload{"", nil, nil}
+            payload := Payload{"", nil, nil}
             SendMessage(CliExit, payload);
             break;
         default:
@@ -138,7 +141,6 @@ func main() {
     }
 }
 
-
 func SendMessage(rpcType RPCType, payload Payload) {
 	rpcMsg := RPCMessage{
 		Type: rpcType,
@@ -146,12 +148,15 @@ func SendMessage(rpcType RPCType, payload Payload) {
 		Sender: NewContact(NewRandomKademliaID(), "client"),
 		Payload: payload}
 
-	conn := rpcMsg.SendTo("localhost:8080")
+	conn := rpcMsg.SendTo("localhost:8080", false)
+    fmt.Println("\nSending request to local kademlia server...");
 	defer conn.Close()
 
-
-	response, _, err := GetRPCMessage(conn, 0)
-	checkError(err)
+	response, _, err := GetRPCMessage(conn, 15, false)
+	if err != nil {
+        fmt.Println("Local server is not responding, start the server using \"kademlia serve\"");
+        os.Exit(1)
+    }
 
 	if response.Type == rpcType {
 		switch (rpcType) {
@@ -166,10 +171,9 @@ func SendMessage(rpcType RPCType, payload Payload) {
 		    break;
 		}
 	} else {
-		fmt.Println("Failed to contact local server, start server using \"kademlia serve\"");
+		fmt.Println("Failed to contact local server, start the server using \"kademlia serve\"");
 	}
 }
-
 
 func checkError(err error) {
 	if err != nil {

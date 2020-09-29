@@ -47,7 +47,7 @@ func (msg RPCMessage) String() string {
 	return "\tType: " + msg.Type.String() + "\n\tID: " + msg.Sender.String()
 }
 
-func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
+func (rpcMsg RPCMessage) SendTo(address string, verbose bool) *net.UDPConn {
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		fmt.Println("Error: Can't resolve the udp address: ", address)
@@ -69,7 +69,9 @@ func (rpcMsg RPCMessage) SendTo(address string) *net.UDPConn {
 		os.Exit(1)
 	}
 
-	fmt.Println("Sent Msg to ", udpAddr, " :\n", rpcMsg.String())
+    if verbose {
+        fmt.Println("Sent Msg to ", udpAddr, " :\n", rpcMsg.String())
+    }
 
 	return conn
 }
