@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
     "sort"
-	"crypto/sha1"
 )
 
 const k = 5
@@ -61,7 +60,7 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
 	conn := rpcMsg.SendTo(contact.Address, true)
 	defer conn.Close()
 
-	_, _, err := GetRPCMessage(conn, 15, true)
+	_, _, err := GetRPCMessage(conn, 5, true)
 	if err != nil {
 		fmt.Println("\nGeting response timeout")
 		return false
@@ -207,6 +206,7 @@ func (network *Network) SendFindDataMessage(address string, hash string) (Payloa
 	return response.Payload, nil
 }
 
+/* TODO: unused function
 func (network *Network) SendStoreMessage(data []byte) {
 	hash := sha1.Sum(data)
 	hashID := NewKademliaID(string(hash[:]))
@@ -228,6 +228,7 @@ func (network *Network) SendStoreMessage(data []byte) {
 		}(contact.Address)
 	}
 }
+*/
 
 func (network *Network) SendFindContactMessage(addr string, id KademliaID) ([]Contact, error) {
 	contacts := make([]Contact, 1)
@@ -371,7 +372,7 @@ func (network *Network) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPCon
 		Type: CliPut,
 		IsNode: true,
 		Sender: network.table.GetMe(),
-		Payload: Payload{"", nil, nil}}
+		Payload: Payload{rpcMsg.Payload.Hash, nil, nil}}
 	response.SendResponse(conn, addr)
 }
 

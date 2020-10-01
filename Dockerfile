@@ -16,6 +16,8 @@ COPY . .
 
 WORKDIR src/
 
+RUN apk add git
+RUN go get -u github.com/gorilla/mux
 RUN go build -o kademlia
 
 ENTRYPOINT ["./kademlia", "serve"]

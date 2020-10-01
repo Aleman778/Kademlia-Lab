@@ -7,6 +7,8 @@ import (
 	"flag"
 	"strings"
 	"math/rand"
+    "crypto/sha1"
+    "encoding/hex"
 	"time"
 )
 
@@ -64,7 +66,9 @@ func main() {
                 fmt.Printf("\nCan't send data that is longer than 255 characters (got %d characters).\n", len(data))
                 os.Exit(1)
             }
-            payload := Payload{data, []byte(data), nil}
+            hash := sha1.Sum([]byte(data))
+            hash_string := hex.EncodeToString(hash[:])
+            payload := Payload{string(hash_string), []byte(data), nil}
             SendMessage(CliPut, payload, os.Stdout);
             break;
         case "get":
@@ -153,7 +157,7 @@ func SendMessage(rpcType RPCType, payload Payload, w io.Writer) {
     fmt.Fprintln(w, "\nSending request to local kademlia server...");
 	defer conn.Close()
 
-	response, _, err := GetRPCMessage(conn, 15, false)
+	response, _, err := GetRPCMessage(conn, 30, false)
 	if err != nil {
         fmt.Fprintln(w, "Local server is not responding, start the server using \"kademlia serve\"");
         os.Exit(1)
@@ -162,7 +166,7 @@ func SendMessage(rpcType RPCType, payload Payload, w io.Writer) {
 	if response.Type == rpcType {
 		switch (rpcType) {
 		case CliPut:
-		    fmt.Fprintf(w, "Data has been stored. Copy your hash:\n%s\n", string(response.Payload.Hash));
+		    fmt.Fprintf(w, "Data has been stored. Copy your hash:\n%s\n", response.Payload.Hash);
 		    break;
 		case CliGet:
 		    fmt.Fprintf(w, "Data retrieved:\n%s\n", string(response.Payload.Data));

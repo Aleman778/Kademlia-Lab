@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+    "fmt"
 )
 
 type Storage struct {
@@ -22,6 +23,7 @@ func NewStorage() *Storage {
 
 func (storage *Storage) Store(hash string, data []byte) {
 	storage.mutex.Lock()
+    fmt.Printf("store: hash = %s\n", hash)
 	defer storage.mutex.Unlock()
 	_, ok := storage.mappedData[hash]
 	if ok {
