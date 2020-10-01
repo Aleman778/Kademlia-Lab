@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+    "io"
 	"flag"
 	"strings"
 	"math/rand"
@@ -64,7 +65,7 @@ func main() {
                 os.Exit(1)
             }
             payload := Payload{data, []byte(data), nil}
-            SendMessage(CliPut, payload);
+            SendMessage(CliPut, payload, os.Stdout);
             break;
         case "get":
             if len(os.Args) != argIndex + 1 || *showHelp {
@@ -76,7 +77,7 @@ func main() {
 
             hash := os.Args[argIndex];
             payload := Payload{string(hash), nil, nil}
-            SendMessage(CliGet, payload);
+            SendMessage(CliGet, payload, os.Stdout);
             break;
 
         case "join":
@@ -110,7 +111,7 @@ func main() {
                 return;
             }
             payload := Payload{"", nil, nil}
-            SendMessage(CliExit, payload);
+            SendMessage(CliExit, payload, os.Stdout);
             break;
         default:
             fmt.Printf("\nInvalid command '%s' was found\n", command);
@@ -141,7 +142,7 @@ func main() {
     }
 }
 
-func SendMessage(rpcType RPCType, payload Payload) {
+func SendMessage(rpcType RPCType, payload Payload, w io.Writer) {
 	rpcMsg := RPCMessage{
 		Type: rpcType,
 		IsNode: false,
@@ -149,29 +150,29 @@ func SendMessage(rpcType RPCType, payload Payload) {
 		Payload: payload}
 
 	conn := rpcMsg.SendTo("localhost:8080", false)
-    fmt.Println("\nSending request to local kademlia server...");
+    fmt.Fprintln(w, "\nSending request to local kademlia server...");
 	defer conn.Close()
 
 	response, _, err := GetRPCMessage(conn, 15, false)
 	if err != nil {
-        fmt.Println("Local server is not responding, start the server using \"kademlia serve\"");
+        fmt.Fprintln(w, "Local server is not responding, start the server using \"kademlia serve\"");
         os.Exit(1)
     }
 
 	if response.Type == rpcType {
 		switch (rpcType) {
 		case CliPut:
-		    fmt.Println("Data has been stored.");
+		    fmt.Fprintf(w, "Data has been stored. Copy your hash:\n%s\n", string(response.Payload.Hash));
 		    break;
 		case CliGet:
-		    fmt.Printf("Data retrieved:\n%s\n", string(response.Payload.Data));
+		    fmt.Fprintf(w, "Data retrieved:\n%s\n", string(response.Payload.Data));
 		    break;
 		case CliExit:
-		    fmt.Println("Node has been terminated");
+		    fmt.Fprintln(w, "Node has been terminated");
 		    break;
 		}
 	} else {
-		fmt.Println("Failed to contact local server, start the server using \"kademlia serve\"");
+		fmt.Fprintln(w, "Failed to contact local server, start the server using \"kademlia serve\"");
 	}
 }
 

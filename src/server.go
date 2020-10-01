@@ -8,13 +8,14 @@ import (
 const PORT = ":8080"
 
 func InitServer() {
-	me := NewContact(NewRandomKademliaID(), resolveHostIp())
+	me := NewContact(NewRandomKademliaID(), resolveHostIp(PORT))
 	network := Network{NewRoutingTable(me), NewStorage()}
-	RunServer(&network)
+	go RunRestServer()
+    RunServer(&network)
 }
 
 func JoinNetwork(address string) {
-	me := NewContact(NewRandomKademliaID(), resolveHostIp())
+	me := NewContact(NewRandomKademliaID(), resolveHostIp(PORT))
 	network := Network{NewRoutingTable(me), NewStorage()}
 
 	network.BootstrapNode(address)
@@ -26,23 +27,15 @@ func RunServer(network *Network) {
 	network.Listen(PORT)
 }
 
-func resolveHostIp() (string) {
-
+func resolveHostIp(port string) (string) {
     netInterfaceAddresses, err := net.InterfaceAddrs()
-
     if err != nil { return "" }
-
     for _, netInterfaceAddress := range netInterfaceAddresses {
-
         networkIp, ok := netInterfaceAddress.(*net.IPNet)
-
         if ok && !networkIp.IP.IsLoopback() && networkIp.IP.To4() != nil {
-
             ip := networkIp.IP.String()
-
-            fmt.Println("Resolved IP: " + ip + PORT)
-
-	    return ip + PORT
+            fmt.Println("Resolved IP: " + ip + port)
+	    return ip + port
         }
     }
     return ""
