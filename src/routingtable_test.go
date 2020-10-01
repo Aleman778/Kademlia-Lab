@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestAddContact(t *testing.T) {
+func TestRoutingTableAddContact(t *testing.T) {
 	rt := NewRoutingTable(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8000"))
 
 	id :=NewKademliaID("1111111100000000000000000000000000000000")
