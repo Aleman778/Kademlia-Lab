@@ -2,7 +2,7 @@ package main
 
 import (
 	"sync"
-    "fmt"
+    "time"
 )
 
 type Storage struct {
@@ -12,25 +12,39 @@ type Storage struct {
 
 type WrappedData struct {
 	data []byte
-	expire int
+	expire int64
 }
 
-const maxExpire = 86400
+// const maxExpire = 86400
+const maxExpire = 10
 
 func NewStorage() *Storage {
-	return &Storage{make(map[string]*WrappedData), sync.RWMutex{}}
+	return &Storage{
+        make(map[string]*WrappedData),
+        sync.RWMutex{}}
 }
 
 func (storage *Storage) Store(hash string, data []byte) {
 	storage.mutex.Lock()
-    fmt.Printf("store: hash = %s\n", hash)
 	defer storage.mutex.Unlock()
 	_, ok := storage.mappedData[hash]
 	if ok {
-		storage.mappedData[hash].expire = maxExpire
+        now := time.Now()
+		storage.mappedData[hash].expire = now.Unix() + maxExpire
 	} else {
-		storage.mappedData[hash] = &WrappedData{data, maxExpire}
+        now := time.Now()
+		storage.mappedData[hash] = &WrappedData{data, now.Unix() + maxExpire}
 	}
+}
+
+func (storage *Storage) Refresh(hash string) {
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
+	_, ok := storage.mappedData[hash]
+	if ok {
+        now := time.Now()
+		storage.mappedData[hash].expire = now.Unix() + maxExpire
+    }
 }
 
 func (storage *Storage) Delete(hash string) {
@@ -40,10 +54,18 @@ func (storage *Storage) Delete(hash string) {
 }
 
 func (storage *Storage) Load(hash string) ([]byte, bool) {
-	storage.mutex.RLock()
-	defer storage.mutex.RUnlock()
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
 	if v, ok := storage.mappedData[hash]; ok != false {
-		return v.data, true
+        now := time.Now()
+        sec := now.Unix()
+        if (sec >= storage.mappedData[hash].expire) {
+            delete(storage.mappedData, hash);
+        } else {
+            storage.mappedData[hash].expire = sec + maxExpire
+            return v.data, true
+        }
 	}
 	return nil, false
 }
+
