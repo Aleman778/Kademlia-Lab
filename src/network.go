@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
     "sort"
+	"sync"
 )
 
 const k = 5
@@ -87,10 +88,57 @@ func (network *Network) BootstrapNode(address string) {
 	}
 
 	sort.Sort(ByDistance(notCalled))
-	network.HandleNodeLookupGoRoutines(*me.ID, called, notCalled)
+	network.StartNodeLookup(*me.ID, notCalled)
 }
 
 func (network *Network) NodeLookup(id KademliaID) []Contact {
+	var notCalled []Contact
+	notCalled = append(notCalled, network.table.FindClosestContacts(&id, k)...)
+	sort.Sort(ByDistance(notCalled))
+
+	return network.StartNodeLookup(id, notCalled)
+}
+
+func (network *Network) StartNodeLookup(id KademliaID, notCalled []Contact) []Contact {
+	contactsCh := make(chan []Contact)
+	defer close(contactsCh)
+
+	contactCh := make(chan Contact)
+	defer close(contactCh)
+
+	go network.NodeLookupSender(id, contactsCh, contactCh)
+
+	return RunLookup(id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+}
+
+
+
+func (network *Network) NodeLookupSender(id KademliaID, writeCh chan<- []Contact, readCh <-chan Contact) {
+	for {
+		contact, more := <-readCh
+		if !more {
+			return
+		}
+		go func(writeCh chan<- []Contact, contact Contact) {
+			contacts, err := network.SendFindContactMessage(contact.Address, id)
+			if err != nil {
+				writeCh <- []Contact{}
+			} else {
+				writeCh <- contacts
+			}
+		}(writeCh, contact)
+	}
+}
+
+func (network *Network) ValueLookup(hash string) Payload {
+	if val, ok := network.storage.Load(hash); ok {
+		return Payload{
+			Hash: hash,
+			Data: val,
+			Contacts: nil};
+	}
+
+	id := NewHashedID(hash)
 	var called []Contact
 	me := network.table.GetMe()
 	me.CalcDistance(&id)
@@ -100,90 +148,64 @@ func (network *Network) NodeLookup(id KademliaID) []Contact {
 	notCalled = append(notCalled, network.table.FindClosestContacts(&id, k)...)
 	sort.Sort(ByDistance(notCalled))
 
-	return network.HandleNodeLookupGoRoutines(id, called, notCalled)
+	resultCh := make(chan Payload)
+	defer close(resultCh)
+
+	go func(id KademliaID, hash string, notCalled []Contact, resultCh chan<- Payload) {
+		contactsCh := make(chan []Contact)
+		defer close(contactsCh)
+
+		contactCh := make(chan Contact)
+		defer close(contactCh)
+
+		go network.ValueLookupSender(hash, contactsCh, contactCh, resultCh)
+
+		RunLookup(id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+	}(id, hash, notCalled, resultCh)
+
+	payload := <-resultCh
+	return payload
 }
 
-func (network *Network) HandleNodeLookupGoRoutines(id KademliaID, called []Contact, notCalled []Contact) []Contact {
-	readCh := make(chan []Contact)
-	defer close(readCh)
-
-	writeCh := make(chan Contact)
-	defer close(writeCh)
-
-	numNotRunning := ALPHA
+func (network *Network) ValueLookupSender(hash string, writeCh chan<- []Contact, readCh <-chan Contact, resultCh chan<- Payload) {
 	isDone := false
-
-	// Start ALPHA GoRoutines
-	for i := 0; i < ALPHA; i++ {
-		go network.NodeLookupGoRoutine(id, readCh, writeCh)
-		if len(notCalled) > 0 {
-			numNotRunning -= 1
-            var contact Contact
-			notCalled, contact = PopCandidate(notCalled)
-			called = append(called, contact)
-			writeCh <- contact
-		}
-	}
-	sort.Sort(ByDistance(called))
-
-	for {
-		if numNotRunning == ALPHA {
-			length := len(called)
-			if length < k {
-				return called
-			}
-			return called[:k]
-		}
-
-		// Get contacts from one of the GoRoutines respones messages
-		contacts := <-readCh
-		numNotRunning += 1
-
-		// Add uncontacted nodes to the notCalled list.
-		for _, contact := range contacts {
-			if !InCandidates(notCalled, contact) && !InCandidates(called, contact) {
-				contact.CalcDistance(&id)
-				notCalled = append(notCalled, contact)
-			}
-		}
-		sort.Sort(ByDistance(notCalled))
-
-		// Make all not running GoRoutines send findnode rpc if there are any uncontacted contacts
-		for {
-			if len(notCalled) != 0 && len(called) >= k  {
-				isDone = called[k-1].distance.Less(notCalled[0].distance)
-			}
-
-			if numNotRunning < 1 || len(notCalled) == 0 || isDone {
-				break
-			}
-			numNotRunning -= 1
-            var contact Contact
-			notCalled, contact = PopCandidate(notCalled)
-			called = append(called, contact)
-			writeCh <- contact
-		}
-		sort.Sort(ByDistance(called))
-	}
-}
-
-// GoRoutine that sends FindNode
-func (network *Network) NodeLookupGoRoutine(id KademliaID, writeCh chan<- []Contact, readCh <-chan Contact) {
+	mutex := sync.RWMutex{}
 	for {
 		contact, more := <-readCh
 		if !more {
+			if !isDone {
+				mutex.Lock()
+				isDone = true
+				mutex.Unlock()
+
+				resultCh <- Payload{"", nil, nil}
+			}
 			return
 		}
+		go func(writeCh chan<- []Contact, contact Contact) {
+			if isDone {
+				writeCh <- []Contact{}
+				return
+			}
+			payload, err := network.SendFindDataMessage(contact.Address, hash)
+			if isDone || err != nil {
+				writeCh <- []Contact{}
+				return
+			}
 
-		contacts, err := network.SendFindContactMessage(contact.Address, id)
-		if err != nil {
-			writeCh <- []Contact{}
-		} else {
-			writeCh <- contacts
-		}
+			if payload.Data != nil {
+				resultCh <- payload
+				mutex.Lock()
+				isDone = true
+				mutex.Unlock()
+				writeCh <- []Contact{}
+				return
+			}
+
+			writeCh <- payload.Contacts
+		}(writeCh, contact)
 	}
 }
-
 
 func (network *Network) SendFindDataMessage(address string, hash string) (Payload, error) {
 	rpcMsg := RPCMessage{
@@ -416,111 +438,3 @@ func (network *Network) AddContact(contact Contact) {
 	}
 }
 
-
-func (network *Network) ValueLookup(hash string) Payload {
-	if val, ok := network.storage.Load(hash); ok {
-		return Payload{
-			Hash: hash,
-			Data: val,
-			Contacts: nil};
-	}
-
-	id := NewHashedID(hash)
-	var called []Contact
-	me := network.table.GetMe()
-	me.CalcDistance(&id)
-	called = append(called, me)
-
-	var notCalled []Contact
-	notCalled = append(notCalled, network.table.FindClosestContacts(&id, k)...)
-	sort.Sort(ByDistance(notCalled))
-
-
-	return network.HandleValueLookupGoRoutines(id, hash, called, notCalled)
-}
-
-func (network *Network) HandleValueLookupGoRoutines(id KademliaID, hash string, called []Contact, notCalled []Contact) Payload {
-	value := Payload{"", nil, nil}
-
-	readCh := make(chan Payload)
-	defer close(readCh)
-
-	writeCh := make(chan Contact)
-	defer close(writeCh)
-
-	numNotRunning := ALPHA
-	foundValue := false
-	searchedKClossest := false
-
-	// Start ALPHA GoRoutines
-	for i := 0; i < ALPHA; i++ {
-		go network.ValueLookupGoRoutine(hash, readCh, writeCh)
-		if len(notCalled) > 0 {
-			numNotRunning -= 1
-            var contact Contact
-			notCalled, contact = PopCandidate(notCalled)
-			called = append(called, contact)
-			writeCh <- contact
-		}
-	}
-	sort.Sort(ByDistance(called))
-
-	for {
-		if numNotRunning == ALPHA {
-			return value
-		}
-
-		// Get contacts from one of the GoRoutines respones messages
-		payload := <-readCh
-		numNotRunning += 1
-
-		if payload.Data != nil {
-			value = payload
-			foundValue = true
-			fmt.Println("Found Value: ", payload)
-		} else {
-			// Add uncontacted nodes to the notCalled list.
-			for _, contact := range payload.Contacts {
-				if !InCandidates(notCalled, contact) && !InCandidates(called, contact) {
-					contact.CalcDistance(&id)
-					notCalled = append(notCalled, contact)
-				}
-			}
-			sort.Sort(ByDistance(notCalled))
-		}
-
-		// Make all not running GoRoutines send findvalue rpc if there are any uncontacted contacts
-		for {
-			if len(notCalled) != 0 && len(called) >= k {
-				searchedKClossest = called[k-1].distance.Less(notCalled[0].distance)
-			}
-
-			if numNotRunning < 1 || len(notCalled) == 0 || searchedKClossest || foundValue {
-				break
-			}
-			numNotRunning -= 1
-			var contact Contact
-			notCalled, contact = PopCandidate(notCalled)
-			called = append(called, contact)
-			writeCh <- contact
-		}
-		sort.Sort(ByDistance(called))
-	}
-}
-
-// GoRoutine that sends FindNode
-func (network *Network) ValueLookupGoRoutine(hash string, writeCh chan<- Payload, readCh <-chan Contact) {
-	for {
-		contact, more := <-readCh
-		if !more {
-			return
-		}
-
-		payload, err := network.SendFindDataMessage(contact.Address, hash)
-		if err != nil {
-			writeCh <- Payload{"", nil, nil}
-		} else {
-			writeCh <- payload
-		}
-	}
-}
