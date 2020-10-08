@@ -53,21 +53,6 @@ func TestSendFindContactMessage(t *testing.T) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 func TestHandleClientPing(t *testing.T) {
 	finished := make(chan bool)
 	network := createNetwork()

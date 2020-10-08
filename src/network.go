@@ -108,7 +108,7 @@ func (network *Network) StartNodeLookup(id KademliaID, notCalled []Contact) []Co
 
 	go network.NodeLookupSender(id, contactsCh, contactCh)
 
-	return RunLookup(id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+	return RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
 }
 
 
@@ -160,7 +160,7 @@ func (network *Network) ValueLookup(hash string) Payload {
 
 		go network.ValueLookupSender(hash, contactsCh, contactCh, resultCh)
 
-		RunLookup(id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+		RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
 	}(id, hash, notCalled, resultCh)
 
 	payload := <-resultCh

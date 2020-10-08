@@ -6,7 +6,7 @@ import (
 )
 
 type Lookup struct {
-	id KademliaID
+	id *KademliaID
 
 	notCalled []Contact
 	called []Contact
@@ -19,8 +19,8 @@ type Lookup struct {
 	mutex sync.RWMutex
 }
 
-func RunLookup(id KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan []Contact) []Contact {
-	me.CalcDistance(me.ID)
+func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan []Contact) []Contact {
+	me.CalcDistance(id)
 	lookup := Lookup{
 		id: id,
 		notCalled: contacts,
@@ -64,14 +64,14 @@ func (self *Lookup) recursiveLookup() {
 			isDone = self.called[k-1].distance.Less(self.notCalled[0].distance)
 		}
 
-		if len(newContacts) > 0 && noNewContacts && isDone {
+		if len(newContacts) > 0 && noNewContacts && !isDone {
 			noNewContacts = false
 			self.wg.Add(1)
 			self.recursiveLookup()
 		}
 	}
 
-	if noNewContacts {
+	if noNewContacts && !isDone {
 		self.lastEffort()
 	}
 }
@@ -99,7 +99,9 @@ func (self *Lookup) callContact() {
 
 	var contact Contact
 	self.notCalled, contact = PopCandidate(self.notCalled)
+	contact.CalcDistance(self.id)
 	self.called = append(self.called, contact)
+	sort.Sort(ByDistance(self.called))
 	self.sendCh <- contact
 
 	self.mutex.Unlock()
@@ -113,9 +115,9 @@ func (self *Lookup) getResponse() []Contact {
 	// Add uncontacted nodes to the notCalled list.
 	for _, contact := range contacts {
 		if !InCandidates(self.notCalled, contact) && !InCandidates(self.called, contact) {
-			contact.CalcDistance(&self.id)
+			contact.CalcDistance(self.id)
 			self.notCalled = append(self.notCalled, contact)
-			newContacts= append(newContacts, contact)
+			newContacts = append(newContacts, contact)
 		}
 	}
 	sort.Sort(ByDistance(self.notCalled))
