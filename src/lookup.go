@@ -14,12 +14,20 @@ type Lookup struct {
 	wg sync.WaitGroup
 
 	sendCh chan<- Contact
-	receiveCh <-chan []Contact
+	receiveCh <-chan LookupResponse
+
+	clossestHasNotValue Contact
 
 	mutex sync.RWMutex
 }
 
-func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan []Contact) []Contact {
+type LookupResponse struct {
+	contacts []Contact
+	contact Contact
+	hasValue bool
+}
+
+func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan LookupResponse) ([]Contact, Contact) {
 	me.CalcDistance(id)
 	lookup := Lookup{
 		id: id,
@@ -28,6 +36,7 @@ func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Con
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
+		clossestHasNotValue: me,
 		mutex: sync.RWMutex{}}
 
 	lookup.wg.Add(1)
@@ -36,9 +45,9 @@ func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Con
 	lookup.wg.Wait()
 
 	if len(lookup.called) < k {
-		return lookup.called
+		return lookup.called, lookup.clossestHasNotValue
 	}
-	return lookup.called[:k]
+	return lookup.called[:k], lookup.clossestHasNotValue
 }
 
 func (self *Lookup) recursiveLookup() {
@@ -64,7 +73,7 @@ func (self *Lookup) recursiveLookup() {
 			isDone = self.called[k-1].distance.Less(self.notCalled[0].distance)
 		}
 
-		if len(newContacts) > 0 && noNewContacts && !isDone {
+		if len(newContacts) > 0 && !isDone {
 			noNewContacts = false
 			self.wg.Add(1)
 			self.recursiveLookup()
@@ -108,12 +117,16 @@ func (self *Lookup) callContact() {
 }
 
 func (self *Lookup) getResponse() []Contact {
-	contacts := <-self.receiveCh
+	response := <-self.receiveCh
+
+	if !response.hasValue && response.contact.ID.Less(self.clossestHasNotValue.ID) {
+		self.clossestHasNotValue = response.contact
+	}
 
 	var newContacts []Contact
 	self.mutex.Lock()
 	// Add uncontacted nodes to the notCalled list.
-	for _, contact := range contacts {
+	for _, contact := range response.contacts {
 		if !InCandidates(self.notCalled, contact) && !InCandidates(self.called, contact) {
 			contact.CalcDistance(self.id)
 			self.notCalled = append(self.notCalled, contact)

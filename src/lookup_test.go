@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetResponse(t *testing.T) {
-	receiveCh := make(chan []Contact)
+	receiveCh := make(chan LookupResponse)
 	defer close(receiveCh)
 
 	sendCh := make(chan Contact)
@@ -30,11 +30,12 @@ func TestGetResponse(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
+		clossestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 
 	go func(){
-		contacts := []Contact{contact2, contact3}
+		contacts := LookupResponse{[]Contact{contact2, contact3}, contact2, false}
 		receiveCh <- contacts
 	}()
 
@@ -50,7 +51,7 @@ func TestGetResponse(t *testing.T) {
 }
 
 func TestCallContact(t *testing.T) {
-	receiveCh := make(chan []Contact)
+	receiveCh := make(chan LookupResponse)
 	defer close(receiveCh)
 
 	sendCh := make(chan Contact)
@@ -73,6 +74,7 @@ func TestCallContact(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
+		clossestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 	lookup.wg.Add(1)
@@ -98,7 +100,7 @@ func TestCallContact(t *testing.T) {
 func TestLastEffort(t *testing.T) {
 	wg := sync.WaitGroup{}
 
-	receiveCh := make(chan []Contact)
+	receiveCh := make(chan LookupResponse)
 	defer close(receiveCh)
 
 	sendCh := make(chan Contact)
@@ -121,6 +123,7 @@ func TestLastEffort(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
+		clossestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 	wg.Add(1)
@@ -130,7 +133,7 @@ func TestLastEffort(t *testing.T) {
 		if !contact.ID.Equals(contact1.ID) {
 			t.Error("Expected contact ", contact1, " got ", contact)
 		}
-		receiveCh <- []Contact{}
+		receiveCh <- LookupResponse{[]Contact{}, contact, false}
 	}()
 
 	lookup.lastEffort()
@@ -145,7 +148,7 @@ func TestLastEffort(t *testing.T) {
 }
 
 func TestRunLookupLessThenK(t *testing.T) {
-	receiveCh := make(chan []Contact)
+	receiveCh := make(chan LookupResponse)
 	defer close(receiveCh)
 
 	sendCh := make(chan Contact)
@@ -167,28 +170,32 @@ func TestRunLookupLessThenK(t *testing.T) {
 	go func() {
 		hasReturnd := false
 		for {
-			_, more := <-sendCh
+			contact, more := <-sendCh
 			if !more {
 				return
 			}
 
 			if hasReturnd {
-				receiveCh <- []Contact{}
+				receiveCh <- LookupResponse{[]Contact{}, contact, false}
 			} else {
 				hasReturnd = true
-				receiveCh <- []Contact{contact2, contact3}
+				receiveCh <- LookupResponse{[]Contact{contact2, contact3}, contact, true}
 			}
 		}
 	}()
 
-	contacts := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+	contacts, contact := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+
+	if !contact.ID.Equals(contact2.ID) {
+		t.Error("Expected contact ", contact2, " got ", contact)
+	}
 
 	checkContacts(t, contacts, expContacts)
 }
 
 
 func TestRunLookup(t *testing.T) {
-	receiveCh := make(chan []Contact)
+	receiveCh := make(chan LookupResponse)
 	defer close(receiveCh)
 
 	sendCh := make(chan Contact)
@@ -218,22 +225,26 @@ func TestRunLookup(t *testing.T) {
 	go func() {
 		hasReturnd := false
 		for {
-			_, more := <-sendCh
+			contact, more := <-sendCh
 			if !more {
 				return
 			}
-			go func(){
+			go func(contact Contact){
 				if hasReturnd {
-					receiveCh <- []Contact{contact1}
+					receiveCh <- LookupResponse{[]Contact{contact1}, contact, false}
 				} else {
 					hasReturnd = true
-					receiveCh <- []Contact{contact2, contact3, contact4, contact5, contact6}
+					receiveCh <- LookupResponse{[]Contact{contact2, contact3, contact4, contact5, contact6}, contact, true}
 				}
-			}()
+			}(contact)
 		}
 	}()
 
-	contacts := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+	contacts, contact := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+
+	if !contact.ID.Equals(contact2.ID) {
+		t.Error("Expected contact ", contact2, " got ", contact)
+	}
 
 	checkContacts(t, contacts, expContacts[:k])
 }
@@ -246,7 +257,6 @@ func checkContacts(t *testing.T, contacts []Contact, expContacts []Contact) {
 	for i := 0; i < len(expContacts); i++ {
 		if !contacts[i].ID.Equals(expContacts[i].ID) {
 			t.Error("Expected contact ", expContacts[i], " got ", contacts[i])
-			t.Error("Expected contact ", expContacts[i].distance, " got ", contacts[i].distance)
 		}
 	}
 }

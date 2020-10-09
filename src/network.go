@@ -100,7 +100,7 @@ func (network *Network) NodeLookup(id KademliaID) []Contact {
 }
 
 func (network *Network) StartNodeLookup(id KademliaID, notCalled []Contact) []Contact {
-	contactsCh := make(chan []Contact)
+	contactsCh := make(chan LookupResponse)
 	defer close(contactsCh)
 
 	contactCh := make(chan Contact)
@@ -108,23 +108,24 @@ func (network *Network) StartNodeLookup(id KademliaID, notCalled []Contact) []Co
 
 	go network.NodeLookupSender(id, contactsCh, contactCh)
 
-	return RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+	contacts, _ := RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+	return contacts
 }
 
 
 
-func (network *Network) NodeLookupSender(id KademliaID, writeCh chan<- []Contact, readCh <-chan Contact) {
+func (network *Network) NodeLookupSender(id KademliaID, writeCh chan<- LookupResponse, readCh <-chan Contact) {
 	for {
 		contact, more := <-readCh
 		if !more {
 			return
 		}
-		go func(writeCh chan<- []Contact, contact Contact) {
+		go func(writeCh chan<- LookupResponse, contact Contact) {
 			contacts, err := network.SendFindContactMessage(contact.Address, id)
 			if err != nil {
-				writeCh <- []Contact{}
+				writeCh <- LookupResponse{[]Contact{}, contact, false}
 			} else {
-				writeCh <- contacts
+				writeCh <- LookupResponse{contacts, contact, false}
 			}
 		}(writeCh, contact)
 	}
@@ -149,25 +150,48 @@ func (network *Network) ValueLookup(hash string) Payload {
 	sort.Sort(ByDistance(notCalled))
 
 	resultCh := make(chan Payload)
-	defer close(resultCh)
 
-	go func(id KademliaID, hash string, notCalled []Contact, resultCh chan<- Payload) {
-		contactsCh := make(chan []Contact)
+	intermediateCh := make(chan Payload)
+	inbetweenCh := make(chan Payload)
+	go func() {
+		defer close(inbetweenCh)
+
+		payload := <-intermediateCh
+		close(intermediateCh)
+		resultCh <- payload
+		close(resultCh)
+		inbetweenCh <- payload
+	}()
+
+	go func(){
+
+		contactsCh := make(chan LookupResponse)
 		defer close(contactsCh)
 
 		contactCh := make(chan Contact)
 		defer close(contactCh)
 
-		go network.ValueLookupSender(hash, contactsCh, contactCh, resultCh)
+		go network.ValueLookupSender(hash, contactsCh, contactCh, intermediateCh)
 
-		RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
-	}(id, hash, notCalled, resultCh)
+		_, contact := RunLookup(&id, network.table.GetMe(), notCalled, contactCh, contactsCh)
+
+		payload := <-inbetweenCh
+		go func(address string) {
+			rpcMsg := RPCMessage{
+				Type: Store,
+				IsNode: true,
+				Sender: network.table.GetMe(),
+				Payload: payload}
+			conn := rpcMsg.SendTo(address, true)
+			defer conn.Close()
+		}(contact.Address)
+	}()
 
 	payload := <-resultCh
 	return payload
 }
 
-func (network *Network) ValueLookupSender(hash string, writeCh chan<- []Contact, readCh <-chan Contact, resultCh chan<- Payload) {
+func (network *Network) ValueLookupSender(hash string, writeCh chan<- LookupResponse, readCh <-chan Contact, resultCh chan<- Payload) {
 	isDone := false
 	mutex := sync.RWMutex{}
 	for {
@@ -182,27 +206,22 @@ func (network *Network) ValueLookupSender(hash string, writeCh chan<- []Contact,
 			}
 			return
 		}
-		go func(writeCh chan<- []Contact, contact Contact) {
-			if isDone {
-				writeCh <- []Contact{}
-				return
-			}
+		go func(writeCh chan<- LookupResponse, contact Contact) {
 			payload, err := network.SendFindDataMessage(contact.Address, hash)
-			if isDone || err != nil {
-				writeCh <- []Contact{}
+			if err != nil {
+				writeCh <- LookupResponse{[]Contact{}, contact, true}
 				return
 			}
 
-			if payload.Data != nil {
+			if payload.Data != nil && !isDone {
 				resultCh <- payload
 				mutex.Lock()
 				isDone = true
 				mutex.Unlock()
-				writeCh <- []Contact{}
-				return
 			}
 
-			writeCh <- payload.Contacts
+			hasValue := payload.Data != nil
+			writeCh <- LookupResponse{payload.Contacts, contact, hasValue}
 		}(writeCh, contact)
 	}
 }
