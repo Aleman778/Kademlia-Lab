@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
 func TestStorage(t *testing.T) {

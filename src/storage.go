@@ -2,16 +2,15 @@ package main
 
 import (
 	"sync"
-    "fmt"
 )
 
 type Storage struct {
 	mappedData map[string]*WrappedData
-	mutex sync.RWMutex
+	mutex      sync.RWMutex
 }
 
 type WrappedData struct {
-	data []byte
+	data   []byte
 	expire int
 }
 
@@ -23,7 +22,6 @@ func NewStorage() *Storage {
 
 func (storage *Storage) Store(hash string, data []byte) {
 	storage.mutex.Lock()
-    fmt.Printf("store: hash = %s\n", hash)
 	defer storage.mutex.Unlock()
 	_, ok := storage.mappedData[hash]
 	if ok {

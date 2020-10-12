@@ -38,7 +38,7 @@ func (bucket *bucket) AddContact(contact Contact) {
 	}
 }
 
-// GetContactAndCalcDistance returns an array of Contacts where 
+// GetContactAndCalcDistance returns an array of Contacts where
 // the distance has already been calculated
 func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
 	var contacts []Contact
@@ -56,28 +56,3 @@ func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
 func (bucket *bucket) Len() int {
 	return bucket.list.Len()
 }
-
-
-func (bucket *bucket) Full() bool {
-	return bucket.list.Len() >= bucketSize
-}
-
-func (bucket *bucket) RemoveContact(contact Contact) {
-	var element *list.Element
-	for e := bucket.list.Front(); e != nil; e = e.Next() {
-		nodeID := e.Value.(Contact).ID
-
-		if (contact).ID.Equals(nodeID) {
-			element = e
-		}
-	}
-
-	if element != nil {
-		bucket.list.Remove(element)
-	}
-}
-
-func (bucket *bucket) GetLast() Contact {
-	return bucket.list.Front().Value.(Contact)
-}
-

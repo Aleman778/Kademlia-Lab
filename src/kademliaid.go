@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/hex"
 	"math/rand"
-	"crypto/sha1"
 )
 
 // the static number of bytes in a KademliaID
@@ -34,16 +33,6 @@ func NewRandomKademliaID() *KademliaID {
 	return &newKademliaID
 }
 
-func NewHashedID(data string) KademliaID {
-	hash := sha1.Sum([]byte(data))
-
-	newKademliaID := KademliaID{}
-	for i := 0; i < IDLength; i++ {
-		newKademliaID[i] = hash[i]
-	}
-	return newKademliaID
-}
-
 // Less returns true if kademliaID < otherKademliaID (bitwise)
 func (kademliaID KademliaID) Less(otherKademliaID *KademliaID) bool {
 	for i := 0; i < IDLength; i++ {
@@ -64,7 +53,7 @@ func (kademliaID KademliaID) Equals(otherKademliaID *KademliaID) bool {
 	return true
 }
 
-// CalcDistance returns a new instance of a KademliaID that is built 
+// CalcDistance returns a new instance of a KademliaID that is built
 // through a bitwise XOR operation betweeen kademliaID and target
 func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 	result := KademliaID{}
