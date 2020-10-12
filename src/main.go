@@ -27,6 +27,16 @@ const EXIT_HELP_STRING string  = "Usage:  kademlia kill\n\n" +
 func main() {
     rand.Seed(time.Now().UTC().UnixNano())
 
+	// Setup go routine for getting rpc messages
+	getRpcCh := make(chan GetRPCConfig)
+	defer close(getRpcCh)
+	go GetRPCMessageStarter(getRpcCh)
+
+	// Setup go routine for sending rpc messages
+	sendToCh := make(chan SendToStruct)
+	defer close(sendToCh)
+	go SendToStarter(sendToCh)
+
     // Setup CLI arguments
     showVersion := flag.Bool("version", false, "Print version number and quit");
     showV := flag.Bool("v", false, "Print version number and quit");
@@ -69,7 +79,7 @@ func main() {
             hash := sha1.Sum([]byte(data))
             hash_string := hex.EncodeToString(hash[:])
             payload := Payload{string(hash_string), []byte(data), nil}
-            SendMessage(CliPut, payload, os.Stdout);
+            SendMessage(getRpcCh, sendToCh, CliPut, payload, os.Stdout);
             break;
         case "get":
             if len(os.Args) != argIndex + 1 || *showHelp {
@@ -81,7 +91,7 @@ func main() {
 
             hash := os.Args[argIndex];
             payload := Payload{string(hash), nil, nil}
-            SendMessage(CliGet, payload, os.Stdout);
+            SendMessage(getRpcCh, sendToCh, CliGet, payload, os.Stdout);
             break;
 
         case "join":
@@ -115,7 +125,7 @@ func main() {
                 return;
             }
             payload := Payload{"", nil, nil}
-            SendMessage(CliExit, payload, os.Stdout);
+            SendMessage(getRpcCh, sendToCh, CliExit, payload, os.Stdout);
             break;
         default:
             fmt.Printf("\nInvalid command '%s' was found\n", command);
@@ -146,18 +156,25 @@ func main() {
     }
 }
 
-func SendMessage(rpcType RPCType, payload Payload, w io.Writer) {
+func SendMessage(getRpcCh chan<- GetRPCConfig, sendToCh chan<- SendToStruct, rpcType RPCType, payload Payload, w io.Writer) {
 	rpcMsg := RPCMessage{
 		Type: rpcType,
 		IsNode: false,
 		Sender: NewContact(NewRandomKademliaID(), "client"),
 		Payload: payload}
 
-	conn := rpcMsg.SendTo("localhost:8080", false)
+	conn := rpcMsg.SendTo(sendToCh, "localhost:8080", false)
     fmt.Fprintln(w, "\nSending request to local kademlia server...");
 	defer conn.Close()
 
-	response, _, err := GetRPCMessage(conn, 30, false)
+
+
+	readCh := make(chan GetRPCData)
+	getRpcCh <- GetRPCConfig{readCh, conn, 30, false}
+	data := <-readCh
+	response := data.rpcMsg
+	err := data.err
+
 	if err != nil {
         fmt.Fprintln(w, "Local server is not responding, start the server using \"kademlia serve\"");
         os.Exit(1)
