@@ -30,7 +30,7 @@ func TestGetResponse(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
-		clossestHasNotValue: contact1,
+		closestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 
@@ -74,7 +74,7 @@ func TestCallContact(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
-		clossestHasNotValue: contact1,
+		closestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 	lookup.wg.Add(1)
@@ -123,7 +123,7 @@ func TestLastEffort(t *testing.T) {
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
-		clossestHasNotValue: contact1,
+		closestHasNotValue: contact1,
 		mutex: sync.RWMutex{}}
 
 	wg.Add(1)

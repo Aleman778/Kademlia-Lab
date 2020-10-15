@@ -3,7 +3,6 @@ package main
 import (
 	"sync"
     "time"
-    "fmt"
 )
 
 type Storage struct {
