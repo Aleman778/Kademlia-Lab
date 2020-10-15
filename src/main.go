@@ -41,6 +41,7 @@ func main() {
     showVersion := flag.Bool("version", false, "Print version number and quit");
     showV := flag.Bool("v", false, "Print version number and quit");
     showHelp := flag.Bool("help", false, "Show help information");
+    objectTTL := flag.Int64("ttl", maxExpire, "Objects time to live");
 
     // Filter CLI command from args, for some reason golang flags fails if there are commands in the arguments.
     command := "";
@@ -50,6 +51,11 @@ func main() {
             command = os.Args[i + 1];
             os.Args = append(os.Args[:i + 1], os.Args[i + 2:]...);
             break;
+        }
+    }
+    for _, arg := range os.Args[1:] {
+        if strings.HasPrefix(arg, "-") {
+            argIndex += 1;
         }
     }
 
@@ -78,9 +84,10 @@ func main() {
             }
             hash := sha1.Sum([]byte(data))
             hash_string := hex.EncodeToString(hash[:])
-            payload := Payload{string(hash_string), []byte(data), nil}
+            payload := Payload{string(hash_string), []byte(data), *objectTTL, nil}
             SendMessage(getRpcCh, sendToCh, CliPut, payload, os.Stdout);
             break;
+
         case "get":
             if len(os.Args) != argIndex + 1 || *showHelp {
                 if !*showHelp { fmt.Printf("\"kademlia get\" require exactly 1 argument\n"); }
@@ -90,7 +97,17 @@ func main() {
             }
 
             hash := os.Args[argIndex];
-            payload := Payload{string(hash), nil, nil}
+            decoded, err := hex.DecodeString(hash)
+            if err != nil {
+                fmt.Print(err)
+            }
+
+            if len(decoded) != IDLength {
+                fmt.Printf("error: expected 160-bit hash in hexadecimal format\n");
+                return;
+            }
+
+            payload := Payload{string(hash), nil, *objectTTL, nil}
             SendMessage(getRpcCh, sendToCh, CliGet, payload, os.Stdout);
             break;
 
@@ -124,7 +141,7 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-            payload := Payload{"", nil, nil}
+            payload := Payload{"", nil, *objectTTL, nil}
             SendMessage(getRpcCh, sendToCh, CliExit, payload, os.Stdout);
             break;
         default:
@@ -144,6 +161,7 @@ func main() {
         fmt.Print("Options:\n");
         fmt.Print("  -v, --version        Print version number and quit\n");
         fmt.Print("      --help           Show help information\n");
+        fmt.Print("      --ttl            Objects time to live\n");
         fmt.Print("\n");
         fmt.Print("Commands:\n");
         fmt.Print("  put       Store data in the hash table and returns the hash key used for get command\n");
@@ -166,8 +184,6 @@ func SendMessage(getRpcCh chan<- GetRPCConfig, sendToCh chan<- SendToStruct, rpc
 	conn := rpcMsg.SendTo(sendToCh, "localhost:8080", false)
     fmt.Fprintln(w, "\nSending request to local kademlia server...");
 	defer conn.Close()
-
-
 
 	readCh := make(chan GetRPCData)
 	getRpcCh <- GetRPCConfig{readCh, conn, 30, false}

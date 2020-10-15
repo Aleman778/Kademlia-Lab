@@ -23,7 +23,7 @@ func PostObjectRest(w http.ResponseWriter, r *http.Request) {
 	defer close(sendToCh)
 
 	w.WriteHeader(http.StatusCreated)
-        payload := Payload{data, []byte(data), nil}
+        payload := Payload{data, []byte(data), maxExpire, nil}
         SendMessage(getRpcCh, sendToCh, CliPut, payload, w)
     }
 }
@@ -39,7 +39,7 @@ func GetObjectRest(w http.ResponseWriter, r *http.Request) {
 
     vars := mux.Vars(r)
     hash := vars["hash"]
-    payload := Payload{hash, []byte(hash), nil}
+    payload := Payload{hash, []byte(hash), maxExpire, nil}
     SendMessage(getRpcCh, sendToCh, CliGet, payload, w)
     w.WriteHeader(http.StatusCreated)
 }
