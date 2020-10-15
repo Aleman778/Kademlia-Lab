@@ -16,7 +16,7 @@ type Lookup struct {
 	sendCh chan<- Contact
 	receiveCh <-chan LookupResponse
 
-	clossestHasNotValue Contact
+	closestHasNotValue Contact
 
 	mutex sync.RWMutex
 }
@@ -36,7 +36,7 @@ func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Con
 		wg: sync.WaitGroup{},
 		sendCh: sendCh,
 		receiveCh: receiveCh,
-		clossestHasNotValue: me,
+		closestHasNotValue: me,
 		mutex: sync.RWMutex{}}
 
 	lookup.wg.Add(1)
@@ -45,9 +45,9 @@ func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Con
 	lookup.wg.Wait()
 
 	if len(lookup.called) < k {
-		return lookup.called, lookup.clossestHasNotValue
+		return lookup.called, lookup.closestHasNotValue
 	}
-	return lookup.called[:k], lookup.clossestHasNotValue
+	return lookup.called[:k], lookup.closestHasNotValue
 }
 
 func (self *Lookup) recursiveLookup() {
@@ -119,8 +119,8 @@ func (self *Lookup) callContact() {
 func (self *Lookup) getResponse() []Contact {
 	response := <-self.receiveCh
 
-	if !response.hasValue && response.contact.ID.Less(self.clossestHasNotValue.ID) {
-		self.clossestHasNotValue = response.contact
+	if !response.hasValue && response.contact.ID.Less(self.closestHasNotValue.ID) {
+		self.closestHasNotValue = response.contact
 	}
 
 	var newContacts []Contact

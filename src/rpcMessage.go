@@ -16,6 +16,7 @@ type RPCMessage struct {
 type Payload struct {
 	Hash string
 	Data []byte
+    TTL int64
 	Contacts []Contact
 }
 

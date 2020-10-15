@@ -3,69 +3,71 @@ package main
 import (
 	"sync"
     "time"
+    "fmt"
 )
 
 type Storage struct {
 	mappedData map[string]*WrappedData
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 type WrappedData struct {
 	data []byte
-	expire int64
+    expireTimer *time.Timer
 }
 
-// const maxExpire = 86400
-const maxExpire = 10
+const maxExpire = 86400
 
 func NewStorage() *Storage {
 	return &Storage{
         make(map[string]*WrappedData),
-        sync.RWMutex{}}
+        sync.Mutex{}}
 }
 
-func (storage *Storage) Store(hash string, data []byte) {
+func (storage *Storage) Store(hash string, data []byte, expire int64) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 	_, ok := storage.mappedData[hash]
-	if ok {
-        now := time.Now()
-		storage.mappedData[hash].expire = now.Unix() + maxExpire
-	} else {
-        now := time.Now()
-		storage.mappedData[hash] = &WrappedData{data, now.Unix() + maxExpire}
+	if !ok {
+		storage.mappedData[hash] = &WrappedData{data, nil}
 	}
+    storage.RefreshExpireTimer(hash, expire)
 }
 
-func (storage *Storage) Refresh(hash string) {
-	storage.mutex.Lock()
-	defer storage.mutex.Unlock()
-	_, ok := storage.mappedData[hash]
-	if ok {
-        now := time.Now()
-		storage.mappedData[hash].expire = now.Unix() + maxExpire
+// NOTE(alexander): not thread safe, guard function call with mutex!
+func (storage *Storage) RefreshExpireTimer(hash string, expire int64)  {
+    if (expire < 0) {
+        expire = maxExpire
+    }
+
+    data, _ := storage.mappedData[hash]
+    if data.expireTimer == nil {
+        data.expireTimer = time.NewTimer(time.Duration(expire)*time.Second)
+        go func() {
+            <-data.expireTimer.C
+            storage.Delete(hash);
+        }()
+    } else {
+        data.expireTimer.Reset(time.Duration(expire)*time.Second)
     }
 }
 
 func (storage *Storage) Delete(hash string) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
+    data, ok := storage.mappedData[hash];
+    if ok && data.expireTimer == nil {
+        data.expireTimer.Stop()
+    }
 	delete(storage.mappedData, hash)
 }
 
-func (storage *Storage) Load(hash string) ([]byte, bool) {
+func (storage *Storage) Load(hash string, expire int64) ([]byte, bool) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 	if v, ok := storage.mappedData[hash]; ok != false {
-        now := time.Now()
-        sec := now.Unix()
-        if (sec >= storage.mappedData[hash].expire) {
-            delete(storage.mappedData, hash);
-        } else {
-            storage.mappedData[hash].expire = sec + maxExpire
-            return v.data, true
-        }
-	}
+        storage.RefreshExpireTimer(hash, expire)
+        return v.data, true
+    }
 	return nil, false
 }
-

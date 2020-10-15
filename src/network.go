@@ -84,7 +84,7 @@ func SendToStarter(readCh <-chan SendToStruct) {
 
 func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verbose bool) {
 	defer close(writeCh)
-
+    
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		fmt.Println("Error: Can't resolve the udp address: ", address)
