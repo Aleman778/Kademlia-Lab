@@ -12,17 +12,19 @@ import (
 	"time"
 )
 
-const VERSION_STRING string    = "Kademlia version 1.0.0"
-const PUT_HELP_STRING string   = "Usage:  kademlia put DATA        Note: maximum of 255 characters allowed\n\n" +
-                                 "Stores the data in the hash table and returns the hash key used for get command"
-const GET_HELP_STRING string   = "Usage:  kademlia get HASH\n\n" +
-                                 "Retrieve previously stored data using the hash key"
-const JOIN_HELP_STRING string  = "Usage:  kademlia join ADDRESS\n\n" +
-                                 "Join another node with the given address"
-const SERVE_HELP_STRING string = "Usage:  kademlia serve\n\n" +
-                                 "Starts the kademlia server on this node"
-const EXIT_HELP_STRING string  = "Usage:  kademlia kill\n\n" +
-                                 "Kills the currently running kademlia node"
+const VERSION_STRING string     = "Kademlia version 1.0.0"
+const PUT_HELP_STRING string    = "Usage:  kademlia put DATA        Note: maximum of 255 characters allowed\n\n" +
+                                  "Stores the data in the hash table and returns the hash key used for get command"
+const GET_HELP_STRING string    = "Usage:  kademlia get HASH\n\n" +
+                                  "Retrieve previously stored data using the hash key"
+const FORGET_HELP_STRING string = "Usage:  kademlia forget HASH\n\n" +
+                                  "Forgets previously stored data using the hash key"
+const JOIN_HELP_STRING string   = "Usage:  kademlia join ADDRESS\n\n" +
+                                  "Join another node with the given address"
+const SERVE_HELP_STRING string  = "Usage:  kademlia serve\n\n" +
+                                  "Starts the kademlia server on this node"
+const EXIT_HELP_STRING string   = "Usage:  kademlia kill\n\n" +
+                                  "Kills the currently running kademlia node"
 
 func main() {
     rand.Seed(time.Now().UTC().UnixNano())
@@ -63,6 +65,11 @@ func main() {
     flag.Parse();
     if (*showVersion || *showV) {
         fmt.Printf(VERSION_STRING);
+        return;
+    }
+
+    if (*objectTTL <= 5) {
+        fmt.Printf("error: time to live is required to be larger than 5 (got %d)\n", *objectTTL);
         return;
     }
 
@@ -110,6 +117,28 @@ func main() {
             payload := Payload{string(hash), nil, *objectTTL, nil}
             SendMessage(getRpcCh, sendToCh, CliGet, payload, os.Stdout);
             break;
+
+        case "forget":
+            if len(os.Args) != argIndex + 1 || *showHelp {
+                if !*showHelp { fmt.Printf("\"kademlia forget\" require exactly 1 argument\n"); }
+                fmt.Print("\n");
+                fmt.Printf("%s\n", FORGET_HELP_STRING);
+                return;
+            }
+            
+            hash := os.Args[argIndex];
+            decoded, err := hex.DecodeString(hash)
+            if err != nil {
+                fmt.Print(err)
+            }
+
+            if len(decoded) != IDLength {
+                fmt.Printf("error: expected 160-bit hash in hexadecimal format\n");
+                return;
+            }
+
+            payload := Payload{string(hash), nil, *objectTTL, nil}
+            SendMessage(getRpcCh, sendToCh, CliForget, payload, os.Stdout);
 
         case "join":
             if len(os.Args) != argIndex + 1 || *showHelp {
@@ -166,6 +195,7 @@ func main() {
         fmt.Print("Commands:\n");
         fmt.Print("  put       Store data in the hash table and returns the hash key used for get command\n");
         fmt.Print("  get       Retrieve previously stored data using the hash key\n");
+        fmt.Print("  forget    Froget previously stored data using the hash key\n");
         fmt.Print("  join      Join another node with the given address\n");
         fmt.Print("  serve     Starts the kademlia server on this node\n");
         fmt.Print("  exit      Kills the currently running kademlia node\n");

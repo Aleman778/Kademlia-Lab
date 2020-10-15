@@ -23,17 +23,20 @@ type Payload struct {
 type RPCType int
 
 const (
-	Ping RPCType = iota
-	Store
-	FindNode
-	FindValue
-	CliPut
-	CliGet
-	CliExit
+    Ping RPCType = iota
+    Store
+    Refresh
+    FindNode
+    FindValue
+    CliPut
+    CliGet
+    CliForget
+    CliExit
 )
 
 func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "CliPut", "CliGet", "CliExit"}
+    rpcType := [...]string{"Ping", "Store", "Refresh", "FindNode", "FindValue",
+                           "CliPut", "CliGet", "CliForget", "CliExit"}
 	if len(rpcType) < int(t) {
 		return ""
 	}
