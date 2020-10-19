@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"fmt"
 	"net"
 	"time"
@@ -9,33 +8,33 @@ import (
 
 type ConnectionData struct {
 	rpcMsg RPCMessage
-	addr *net.UDPAddr
-	err error
+	addr   *net.UDPAddr
+	err    error
 }
 
 type GetRPCConfig struct {
 	writeCh chan<- GetRPCData
-	conn *net.UDPConn
+	conn    *net.UDPConn
 	timeout time.Duration
 	verbose bool
 }
 
 type GetRPCData struct {
 	rpcMsg RPCMessage
-	addr *net.UDPAddr
-	err error
+	addr   *net.UDPAddr
+	err    error
 }
 
 type SendToStruct struct {
 	writeCh chan<- *net.UDPConn
-	rpcMsg RPCMessage
+	rpcMsg  RPCMessage
 	address string
 	verbose bool
 }
 
 type SendResponseStruct struct {
-	rpcMsg RPCMessage
-	conn *net.UDPConn
+	rpcMsg  RPCMessage
+	conn    *net.UDPConn
 	address *net.UDPAddr
 }
 
@@ -64,13 +63,11 @@ func GetRPCMessage(writeCh chan<- GetRPCData, conn *net.UDPConn, timeout time.Du
 
 	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
 	if verbose {
-		fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
+		fmt.Println("Received Msg from ", addr, " :\n", rpcMsg.String())
 	}
 
 	writeCh <- GetRPCData{rpcMsg, addr, nil}
 }
-
-
 
 func SendToStarter(readCh <-chan SendToStruct) {
 	for {
@@ -84,13 +81,13 @@ func SendToStarter(readCh <-chan SendToStruct) {
 
 func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verbose bool) {
 	defer close(writeCh)
-    
+
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		fmt.Println("Error: Can't resolve the udp address: ", address)
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	conn, err := net.DialUDP("udp4", nil, udpAddr)
@@ -98,7 +95,7 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 		fmt.Println("Error: Can't connect to the udp address: ", udpAddr)
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	_, err = conn.Write(EncodeRPCMessage(rpcMsg))
@@ -106,7 +103,7 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 		fmt.Println("Error: Can't write udp message")
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	if verbose {
@@ -115,7 +112,6 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 
 	writeCh <- conn
 }
-
 
 func SendResponseStarter(readCh <-chan SendResponseStruct) {
 	for {
@@ -131,4 +127,3 @@ func SendResponse(rpcMsg RPCMessage, conn *net.UDPConn, address *net.UDPAddr) {
 	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
 	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String())
 }
-
