@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 	"sort"
 	"sync"
+    "runtime/pprof"
+    "os"
+    "log"
 )
 
 const k = 5
@@ -15,6 +17,7 @@ const PORT = ":8080"
 type Server struct {
 	table *RoutingTable
 	storage *Storage
+    shouldExit bool
 
 	getRpcCh chan<- GetRPCConfig
 
@@ -34,7 +37,7 @@ func CreateServer() Server {
 	sendResponseCh := make(chan SendResponseStruct)
 	go SendResponseStarter(sendResponseCh)
 
-	return Server{NewRoutingTable(me), NewStorage(), getRpcCh, sendToCh, sendResponseCh}
+	return Server{NewRoutingTable(me), NewStorage(), false, getRpcCh, sendToCh, sendResponseCh}
 }
 
 func InitServer() {
@@ -73,6 +76,16 @@ func resolveHostIp(port string) (string) {
 
 
 func (server *Server) Listen(port string) {
+    // Enable profiling
+    if *cpuprofile != "" {
+        f, err := os.Create(*cpuprofile + "_server.prof")
+        if err != nil {
+            log.Fatal(err)
+        }
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
+    }
+
 	udpAddr, err := net.ResolveUDPAddr("udp4", port)
 	checkError(err)
 
@@ -83,6 +96,9 @@ func (server *Server) Listen(port string) {
 	fmt.Println("Server setup finished")
 
 	for {
+        if server.shouldExit {
+            return
+        }
 		server.HandleClient(conn)
 	}
 }
@@ -483,7 +499,7 @@ func (server *Server) HandleCliExitMessage(conn *net.UDPConn, addr *net.UDPAddr)
 	close(server.getRpcCh)
 	close(server.sendToCh)
 	close(server.sendResponseCh)
-	os.Exit(0);
+    server.shouldExit = true
 }
 
 func (server *Server) AddContact(contact Contact) {

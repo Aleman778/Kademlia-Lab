@@ -24,6 +24,8 @@ const SERVE_HELP_STRING string = "Usage:  kademlia serve\n\n" +
 const EXIT_HELP_STRING string  = "Usage:  kademlia kill\n\n" +
                                  "Kills the currently running kademlia node"
 
+var cpuprofile = flag.String("cpuprofile", "", "Write cpu profile with name")
+
 func main() {
     rand.Seed(time.Now().UTC().UnixNano())
 
@@ -58,7 +60,6 @@ func main() {
             argIndex += 1;
         }
     }
-
     // Parse flags
     flag.Parse();
     if (*showVersion || *showV) {
@@ -162,6 +163,7 @@ func main() {
         fmt.Print("  -v, --version        Print version number and quit\n");
         fmt.Print("      --help           Show help information\n");
         fmt.Print("      --ttl            Objects time to live\n");
+        fmt.Print("      --cpuprofile     Write cpu profile with name\n");
         fmt.Print("\n");
         fmt.Print("Commands:\n");
         fmt.Print("  put       Store data in the hash table and returns the hash key used for get command\n");
