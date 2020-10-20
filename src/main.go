@@ -234,6 +234,9 @@ func SendMessage(getRpcCh chan<- GetRPCConfig, sendToCh chan<- SendToStruct, rpc
 		case CliGet:
 		    fmt.Fprintf(w, "Data retrieved:\n%s\n", string(response.Payload.Data));
 		    break;
+		case CliForget:
+		    fmt.Fprintf(w, "Data stored with the given hash has been forgotten!\n");
+		    break;
 		case CliExit:
 		    fmt.Fprintln(w, "Node has been terminated");
 		    break;

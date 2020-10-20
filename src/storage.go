@@ -8,7 +8,8 @@ import (
 
 type RefreshTicker struct {
     ticker *time.Ticker
-    doneCh chan bool
+    refreshCh chan int64 // expire time
+    forgetCh chan bool
 }
 
 type Storage struct {
@@ -57,7 +58,8 @@ func (storage *Storage) RefreshExpireTimer(hash string, expire int64)  {
     if !ok {
         return
     }
-    
+
+    fmt.Printf("Refresh expire timeer, TTL = %d seconds\n", expire)
     if data.expireTimer == nil {
         data.expireTimer = time.NewTimer(time.Duration(expire)*time.Second)
         go func() {
@@ -72,26 +74,27 @@ func (storage *Storage) RefreshExpireTimer(hash string, expire int64)  {
 func (storage *Storage) RefreshDataPeriodically(hash string, expire int64, storing bool) *RefreshTicker {
     storage.mutex.Lock()
     defer storage.mutex.Unlock()
-    expire -= 3
     t, ok := storage.refreshStorage[hash]
     if expire <= 0 {
         return nil
     }
 
     if ok {
-        storage.RefreshExpireTimer(hash, expire) // NOTE(alexander): Refresh for safety might reset before new tick.
-        t.ticker.Reset(time.Duration(expire)*time.Second)
-        return nil // NOTE(alexander): Ticker already running no need to create another go routine
+        fmt.Printf("Resetting ticker, refresh storage every %d seconds\n", expire - 3)
+        t.refreshCh <- expire // NOTE(alexander): Refresh for safety might reset before new tick.
+        t.ticker.Reset(time.Duration(expire - 3)*time.Second)
+        return nil
     }
 
-    if !storing { // NOTE(alexander): CliGet might update the TTL but does not refresh storage.
+    if !storing {
         return nil
     }
 
     fmt.Printf("Starting ticker, refresh storage every %d seconds\n", expire - 3)
-    ticker := time.NewTicker(time.Duration(expire)*time.Second)
-    doneCh := make(chan bool)
-    refreshTicker := RefreshTicker{ticker, doneCh}
+    ticker := time.NewTicker(time.Duration(expire - 3)*time.Second)
+    refreshCh := make(chan int64)
+    forgetCh := make(chan bool)
+    refreshTicker := RefreshTicker{ticker, refreshCh, forgetCh}
     storage.refreshStorage[hash] = refreshTicker
     return &refreshTicker
 }
@@ -102,7 +105,7 @@ func (storage *Storage) StopDataRefresh(hash string) {
     t, ok := storage.refreshStorage[hash]
     if ok {
         t.ticker.Stop()
-        t.doneCh <- true
+        t.forgetCh <- true
         delete(storage.refreshStorage, hash)
     }
 }
@@ -116,7 +119,7 @@ func (storage *Storage) Delete(hash string) {
         t, ok := storage.refreshStorage[hash]
         if ok {
             t.ticker.Stop()
-            t.doneCh <- true
+            t.forgetCh <- true
             delete(storage.refreshStorage, hash)
         }
     }
