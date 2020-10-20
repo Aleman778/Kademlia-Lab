@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"fmt"
 	"net"
 	"time"
@@ -84,13 +83,13 @@ func SendToStarter(readCh <-chan SendToStruct) {
 
 func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verbose bool) {
 	defer close(writeCh)
-    
+
 	udpAddr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
 		fmt.Println("Error: Can't resolve the udp address: ", address)
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	conn, err := net.DialUDP("udp4", nil, udpAddr)
@@ -98,7 +97,7 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 		fmt.Println("Error: Can't connect to the udp address: ", udpAddr)
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	_, err = conn.Write(EncodeRPCMessage(rpcMsg))
@@ -106,7 +105,7 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 		fmt.Println("Error: Can't write udp message")
 		fmt.Println("Fatal error ", err.Error())
 		writeCh <- nil
-		os.Exit(1)
+		return
 	}
 
 	if verbose {

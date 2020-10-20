@@ -219,16 +219,19 @@ func (server *Server) ValueLookup(hash string, expire int64) Payload {
 		close(contactCh)
 
 		payload := <-inbetweenCh
-        payload.TTL = expire
-		rpcMsg := RPCMessage{
-			Type: Store,
-			IsNode: true,
-			Sender: server.table.GetMe(),
-			Payload: payload}
-		conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
-		if conn != nil {
-			defer conn.Close()
+		if payload.Data != nil {
+			payload.TTL = expire
+			rpcMsg := RPCMessage{
+				Type: Store,
+				IsNode: true,
+				Sender: server.table.GetMe(),
+				Payload: payload}
+			conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
+			if conn != nil {
+				conn.Close()
+			}
 		}
+
 	}()
 
 	payload := <-resultCh

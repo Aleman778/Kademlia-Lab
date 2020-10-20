@@ -13,6 +13,8 @@ services:
     tty: true
     ports:
       - "4000:8080/udp"
+      - "4001:8081"
+      - "4001:8081/udp"
     networks:
       - kademlia_network
     

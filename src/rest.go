@@ -5,6 +5,8 @@ import (
     "fmt"
     "net/http"
     "github.com/gorilla/mux"
+    "crypto/sha1"
+    "encoding/hex"
 )
 
 func PostObjectRest(w http.ResponseWriter, r *http.Request) {
@@ -22,8 +24,12 @@ func PostObjectRest(w http.ResponseWriter, r *http.Request) {
 	go SendToStarter(sendToCh)
 	defer close(sendToCh)
 
+        hash := sha1.Sum([]byte(data))
+        hash_string := hex.EncodeToString(hash[:])
+
 	w.WriteHeader(http.StatusCreated)
-        payload := Payload{data, []byte(data), maxExpire, nil}
+
+        payload := Payload{hash_string, []byte(data), maxExpire, nil}
         SendMessage(getRpcCh, sendToCh, CliPut, payload, w)
     }
 }
