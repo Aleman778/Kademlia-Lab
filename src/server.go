@@ -11,6 +11,7 @@ import (
 const k = 5
 const ALPHA = 3
 const PORT = ":8080"
+const RPCTIMEOUT = 1
 
 type Server struct {
 	table *RoutingTable
@@ -101,7 +102,7 @@ func (server *Server) SendPingMessage(contact *Contact) bool {
 	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 5, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 
 	if data.err != nil {
@@ -289,7 +290,7 @@ func (server *Server) SendFindDataMessage(address string, hash string) (Payload,
 	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 15, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 	if data.err != nil {
 		fmt.Println("\nGetting response timeout")
@@ -319,7 +320,7 @@ func (server *Server) SendFindContactMessage(addr string, id KademliaID, expire 
 	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 15, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 
 	if data.err != nil {
@@ -447,7 +448,7 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
 			defer conn.Close()
 
 			readCh := make(chan GetRPCData)
-			server.getRpcCh <- GetRPCConfig{readCh, conn, 5, true}
+			server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 			data := <-readCh
 
 			if data.err != nil {
