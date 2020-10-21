@@ -169,8 +169,8 @@ func (server *Server) NodeLookupSender(id KademliaID, writeCh chan<- LookupRespo
 	}
 }
 
-func (server *Server) ValueLookup(hash string, expire int64) Payload {
-	if val, ok := server.storage.Load(hash, expire); ok {
+func (server *Server) ValueLookup(hash string) Payload {
+	if val, ok := server.storage.Load(hash); ok {
 		return Payload{
 			Hash: hash,
 			Data: val,
@@ -207,7 +207,7 @@ func (server *Server) ValueLookup(hash string, expire int64) Payload {
 
 		contactCh := make(chan Contact)
 
-		go server.ValueLookupSender(hash, contactsCh, contactCh, intermediateCh, expire)
+		go server.ValueLookupSender(hash, contactsCh, contactCh, intermediateCh)
 
 		_, contact := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
 		close(contactsCh)
@@ -215,25 +215,23 @@ func (server *Server) ValueLookup(hash string, expire int64) Payload {
 
 		payload := <-inbetweenCh
 		if payload.Data != nil {
-			payload.TTL = expire
-			rpcMsg := RPCMessage{
-				Type: Store,
-				IsNode: true,
-				Sender: server.table.GetMe(),
-				Payload: payload}
-			conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
-			if conn != nil {
-				conn.Close()
-			}
-		}
-
+            rpcMsg := RPCMessage{
+                Type: Store,
+                IsNode: true,
+                Sender: server.table.GetMe(),
+                Payload: payload}
+            conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
+            if conn != nil {
+                conn.Close()
+            }
+        }
 	}()
 
 	payload := <-resultCh
 	return payload
 }
 
-func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupResponse, readCh <-chan Contact, resultCh chan<- Payload, expire int64) {
+func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupResponse, readCh <-chan Contact, resultCh chan<- Payload) {
 	isDone := false
 	mutex := sync.RWMutex{}
 	for {
@@ -249,7 +247,7 @@ func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupRespon
 			return
 		}
 		go func(writeCh chan<- LookupResponse, contact Contact) {
-			payload, err := server.SendFindDataMessage(contact.Address, hash, expire)
+			payload, err := server.SendFindDataMessage(contact.Address, hash)
 			if err != nil {
 				writeCh <- LookupResponse{[]Contact{}, contact, true}
 				return
@@ -268,7 +266,7 @@ func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupRespon
 	}
 }
 
-func (server *Server) SendFindDataMessage(address string, hash string, expire int64) (Payload, error) {
+func (server *Server) SendFindDataMessage(address string, hash string) (Payload, error) {
 	rpcMsg := RPCMessage{
 		Type: FindValue,
 		IsNode: true,
@@ -276,7 +274,7 @@ func (server *Server) SendFindDataMessage(address string, hash string, expire in
 		Payload: Payload {
 			Hash: hash,
             Data: nil,
-            TTL: expire,
+            TTL: 0,
 			Contacts: nil,
 		}}
 	conn := rpcMsg.SendTo(server.sendToCh, address, true)
@@ -348,7 +346,7 @@ func (server *Server) HandleClient(conn *net.UDPConn) {
 	case Store:
 		go server.HandleStoreMessage(&data.rpcMsg, conn, data.addr)
     case Refresh:
-        go server.storage.RefreshExpireTimer(data.rpcMsg.Payload.Hash, data.rpcMsg.Payload.TTL);
+        go server.storage.Load(data.rpcMsg.Payload.Hash);
 	case FindNode:
 		go server.HandleFindNodeMessage(&data.rpcMsg, conn, data.addr)
 	case FindValue:
@@ -400,7 +398,7 @@ func (server *Server) HandleFindNodeMessage(msg *RPCMessage, conn *net.UDPConn, 
 }
 
 func (server *Server) HandleFindValueMessage(msg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
-	if val, ok := server.storage.Load(msg.Payload.Hash, msg.Payload.TTL); ok {
+	if val, ok := server.storage.Load(msg.Payload.Hash); ok {
 		rpcMsg := RPCMessage{
 			Type: FindValue,
 			IsNode: true,
@@ -430,34 +428,28 @@ func (server *Server) HandleFindValueMessage(msg *RPCMessage, conn *net.UDPConn,
 func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
 	id := NewHashedID(rpcMsg.Payload.Hash)
 	closest := server.NodeLookup(id, rpcMsg.Payload.TTL)
-    t := server.storage.RefreshDataPeriodically(rpcMsg.Payload.Hash, rpcMsg.Payload.TTL, true)
+    t := server.storage.RefreshDataPeriodically(rpcMsg.Payload.Hash, rpcMsg.Payload.TTL)
     expire := rpcMsg.Payload.TTL
     if t != nil {
         go func() {
-            refreshFunc := func(expire int64) {
-                for _, c := range closest {
-                    rpcMsg := RPCMessage{
-                        Type: Refresh,
-                        IsNode: true,
-                        Sender: server.table.GetMe(),
-                        Payload: Payload {
-                            Hash: string(rpcMsg.Payload.Hash),
-                                Data: nil,
-                                TTL: expire,
-                                Contacts: nil}}
-                    conn := rpcMsg.SendTo(server.sendToCh, c.Address, true)
-                    defer conn.Close()
-                }
-            }
-            
             for {
                 select {
                 case <-t.forgetCh:
                     return
-                case expire = <-t.refreshCh:
-                    refreshFunc(expire)
                 case _ = <-t.ticker.C:
-                    refreshFunc(expire)
+                    for _, c := range closest {
+                        rpcMsg := RPCMessage{
+                            Type: Refresh,
+                            IsNode: true,
+                            Sender: server.table.GetMe(),
+                            Payload: Payload {
+                                Hash: string(rpcMsg.Payload.Hash),
+                                    Data: nil,
+                                    TTL: expire,
+                                    Contacts: nil}}
+                        conn := rpcMsg.SendTo(server.sendToCh, c.Address, true)
+                        defer conn.Close()
+                    }
                 }
             }
         }()
@@ -496,9 +488,7 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
 }
 
 func (server *Server) HandleCliGetMessage(rpcMsg *RPCMessage, conn *net.UDPConn, addr *net.UDPAddr) {
-	payload := server.ValueLookup(rpcMsg.Payload.Hash, rpcMsg.Payload.TTL)
-    server.storage.RefreshDataPeriodically(rpcMsg.Payload.Hash, rpcMsg.Payload.TTL, false)
-
+	payload := server.ValueLookup(rpcMsg.Payload.Hash)
 	response := RPCMessage{
 		Type: CliGet,
 		IsNode: true,
