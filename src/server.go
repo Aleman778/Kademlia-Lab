@@ -11,6 +11,7 @@ import (
 const k = 5
 const ALPHA = 3
 const PORT = ":8080"
+const RPCTIMEOUT = 1
 
 type Server struct {
 	table *RoutingTable
@@ -92,10 +93,12 @@ func (server *Server) SendPingMessage(contact *Contact) bool {
 		Payload: Payload{"", nil, maxExpire, nil}}
 
 	conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
-	defer conn.Close()
+	if conn != nil {
+		defer conn.Close()
+	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 5, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 
 	if data.err != nil {
@@ -201,26 +204,29 @@ func (server *Server) ValueLookup(hash string, expire int64) Payload {
 	go func(){
 
 		contactsCh := make(chan LookupResponse)
-		defer close(contactsCh)
 
 		contactCh := make(chan Contact)
-		defer close(contactCh)
 
 		go server.ValueLookupSender(hash, contactsCh, contactCh, intermediateCh, expire)
 
 		_, contact := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
+		close(contactsCh)
+		close(contactCh)
 
 		payload := <-inbetweenCh
-        payload.TTL = expire
-		go func(address string) {
+		if payload.Data != nil {
+			payload.TTL = expire
 			rpcMsg := RPCMessage{
 				Type: Store,
 				IsNode: true,
 				Sender: server.table.GetMe(),
 				Payload: payload}
-			conn := rpcMsg.SendTo(server.sendToCh, address, true)
-			defer conn.Close()
-		}(contact.Address)
+			conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
+			if conn != nil {
+				conn.Close()
+			}
+		}
+
 	}()
 
 	payload := <-resultCh
@@ -250,10 +256,10 @@ func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupRespon
 			}
 
 			if payload.Data != nil && !isDone {
-				resultCh <- payload
 				mutex.Lock()
 				isDone = true
 				mutex.Unlock()
+				resultCh <- payload
 			}
 
 			hasValue := payload.Data != nil
@@ -274,10 +280,12 @@ func (server *Server) SendFindDataMessage(address string, hash string, expire in
 			Contacts: nil,
 		}}
 	conn := rpcMsg.SendTo(server.sendToCh, address, true)
-	defer conn.Close()
+	if conn != nil {
+		defer conn.Close()
+	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 15, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 	if data.err != nil {
 		fmt.Println("\nGetting response timeout")
@@ -301,10 +309,12 @@ func (server *Server) SendFindContactMessage(addr string, id KademliaID, expire 
 		}}
 
 	conn := rpcMsg.SendTo(server.sendToCh, addr, true)
-	defer conn.Close()
+	if conn != nil {
+		defer conn.Close()
+	}
 
 	readCh := make(chan GetRPCData)
-	server.getRpcCh <- GetRPCConfig{readCh, conn, 15, true}
+	server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 	data := <-readCh
 
 	if data.err != nil {
@@ -469,7 +479,7 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
 			defer conn.Close()
 
 			readCh := make(chan GetRPCData)
-			server.getRpcCh <- GetRPCConfig{readCh, conn, 5, true}
+			server.getRpcCh <- GetRPCConfig{readCh, conn, RPCTIMEOUT, true}
 			data := <-readCh
 
 			if data.err != nil {

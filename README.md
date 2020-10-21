@@ -23,3 +23,15 @@ Just run the destroy script (you may need to set permissions `chmod +x kademlia_
 ```
 $ ./kademlia_destroy.sh
 ```
+
+## Test Rest API
+For testing retriving objects run the following:
+```
+curl -v http://localhost:4001/objects/<Object Hash>
+```
+
+For testing sotring objects run the following:
+```
+curl -d '' http://localhost:4001/objects/<Data>
+```
+
