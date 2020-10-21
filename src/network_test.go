@@ -139,12 +139,24 @@ func TestSendResponseStarter(t *testing.T) {
 		t.Errorf("Test failed due to error in resolving address for server")
 		return
 	}
-	server, err := net.ListenUDP("udp", saddr)
-	if err != nil {
-		t.Errorf("Test failed due to error in creating connection")
-		return
-	}
-	defer server.Close()
+
+	go func() {
+		server, err := net.ListenUDP("udp", saddr)
+		if err != nil {
+			t.Errorf("Test failed due to error in creating connection")
+			return
+		}
+		buffer := make([]byte, 1024)
+		num, _, err := server.ReadFromUDP(buffer)
+		if num == 0 || err != nil {
+			t.Errorf("No data received from send response")
+		}
+		var msg RPCMessage
+		DecodeRPCMessage(&msg, buffer)
+		if msg.Type != Ping && msg.IsNode != false {
+			t.Errorf("Msg sent is not correct")
+		}
+	}()
 
 	readChan := make(chan SendResponseStruct, 5)
 	rpc := RPCMessage{Ping, false, Contact{}, Payload{}}
@@ -159,17 +171,6 @@ func TestSendResponseStarter(t *testing.T) {
 	sendResponse := SendResponseStruct{rpc, conn, addr}
 	readChan <- sendResponse
 	go SendResponseStarter(readChan)
-
-	buffer := make([]byte, 1024)
-	num, _, err := server.ReadFromUDP(buffer)
-	if num == 0 || err != nil {
-		t.Errorf("No data received from send response")
-	}
-	var msg RPCMessage
-	DecodeRPCMessage(&msg, buffer)
-	if msg.Type != Ping && msg.IsNode != false {
-		t.Errorf("Msg sent is not correct")
-	}
 
 	close(readChan)
 	go SendResponseStarter(readChan)
@@ -186,26 +187,28 @@ func TestSendResponse(t *testing.T) {
 		t.Errorf("Test failed due to error in resolving address for client")
 		return
 	}
-	server, err := net.ListenUDP("udp", saddr)
-	if err != nil {
-		t.Errorf("Test failed due to error in creating connection")
-		return
-	}
-	defer server.Close()
+
+	go func() {
+		server, err := net.ListenUDP("udp", saddr)
+		if err != nil {
+			t.Errorf("Test failed due to error in creating connection")
+			return
+		}
+		buffer := make([]byte, 1024)
+		num, _, err := server.ReadFromUDP(buffer)
+		if num == 0 || err != nil {
+			t.Errorf("No data received from send response")
+		}
+		var msg RPCMessage
+		DecodeRPCMessage(&msg, buffer)
+		if msg.Type != Ping && msg.IsNode != false {
+			t.Errorf("Msg sent is not correct")
+		}
+	}()
+
 	client, err := net.DialUDP("udp", caddr, saddr)
 	defer client.Close()
 
 	rpc := RPCMessage{Ping, false, Contact{}, Payload{}}
-	SendResponse(rpc, client, saddr)
-
-	buffer := make([]byte, 1024)
-	num, _, err := server.ReadFromUDP(buffer)
-	if num == 0 || err != nil {
-		t.Errorf("No data received from send response")
-	}
-	var msg RPCMessage
-	DecodeRPCMessage(&msg, buffer)
-	if msg.Type != Ping && msg.IsNode != false {
-		t.Errorf("Msg sent is not correct")
-	}
+	go SendResponse(rpc, client, saddr)
 }

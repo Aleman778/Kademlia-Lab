@@ -124,7 +124,7 @@ func SendResponseStarter(readCh <-chan SendResponseStruct) {
 }
 
 func SendResponse(rpcMsg RPCMessage, conn *net.UDPConn, address *net.UDPAddr) {
-	_, err := conn.Write(EncodeRPCMessage(rpcMsg))
+	_, err := conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
 	if err != nil {
 		fmt.Println("Could not send Msg to ", address, " : \n ", rpcMsg.String())
 		fmt.Println(err)
