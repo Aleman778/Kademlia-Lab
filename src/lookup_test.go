@@ -184,7 +184,7 @@ func TestRunLookupLessThenK(t *testing.T) {
 		}
 	}()
 
-	contacts, contact := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+	contacts, contact, _ := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
 
 	if !contact.ID.Equals(contact2.ID) {
 		t.Error("Expected contact ", contact2, " got ", contact)
@@ -240,7 +240,7 @@ func TestRunLookup(t *testing.T) {
 		}
 	}()
 
-	contacts, contact := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
+	contacts, contact, _ := RunLookup(id, contact1, []Contact{contact3}, sendCh, receiveCh)
 
 	if !contact.ID.Equals(contact2.ID) {
 		t.Error("Expected contact ", contact2, " got ", contact)
