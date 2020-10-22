@@ -8,33 +8,33 @@ import (
 
 type ConnectionData struct {
 	rpcMsg RPCMessage
-	addr *net.UDPAddr
-	err error
+	addr   *net.UDPAddr
+	err    error
 }
 
 type GetRPCConfig struct {
 	writeCh chan<- GetRPCData
-	conn *net.UDPConn
+	conn    *net.UDPConn
 	timeout time.Duration
 	verbose bool
 }
 
 type GetRPCData struct {
 	rpcMsg RPCMessage
-	addr *net.UDPAddr
-	err error
+	addr   *net.UDPAddr
+	err    error
 }
 
 type SendToStruct struct {
 	writeCh chan<- *net.UDPConn
-	rpcMsg RPCMessage
+	rpcMsg  RPCMessage
 	address string
 	verbose bool
 }
 
 type SendResponseStruct struct {
-	rpcMsg RPCMessage
-	conn *net.UDPConn
+	rpcMsg  RPCMessage
+	conn    *net.UDPConn
 	address *net.UDPAddr
 }
 
@@ -63,13 +63,11 @@ func GetRPCMessage(writeCh chan<- GetRPCData, conn *net.UDPConn, timeout time.Du
 
 	DecodeRPCMessage(&rpcMsg, inputBytes[:length])
 	if verbose {
-		fmt.Println("Recived Msg from ", addr, " :\n", rpcMsg.String())
+		fmt.Println("Received Msg from ", addr, " :\n", rpcMsg.String())
 	}
 
 	writeCh <- GetRPCData{rpcMsg, addr, nil}
 }
-
-
 
 func SendToStarter(readCh <-chan SendToStruct) {
 	for {
@@ -115,7 +113,6 @@ func SendTo(writeCh chan<- *net.UDPConn, rpcMsg RPCMessage, address string, verb
 	writeCh <- conn
 }
 
-
 func SendResponseStarter(readCh <-chan SendResponseStruct) {
 	for {
 		value, more := <-readCh
@@ -127,7 +124,11 @@ func SendResponseStarter(readCh <-chan SendResponseStruct) {
 }
 
 func SendResponse(rpcMsg RPCMessage, conn *net.UDPConn, address *net.UDPAddr) {
-	conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
+	_, err := conn.WriteToUDP(EncodeRPCMessage(rpcMsg), address)
+	if err != nil {
+		fmt.Println("Could not send Msg to ", address, " : \n ", rpcMsg.String())
+		fmt.Println(err)
+		return
+	}
 	fmt.Println("Sent Msg to ", address, " :\n", rpcMsg.String())
 }
-
