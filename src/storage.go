@@ -3,7 +3,6 @@ package main
 import (
 	"sync"
     "time"
-    "fmt"
 )
 
 type RefreshTicker struct {
@@ -24,7 +23,6 @@ type WrappedData struct {
 }
 
 const maxExpire = 86400
-const maxExpireCache = 10
 
 func NewStorage() *Storage {
 	return &Storage{
@@ -33,18 +31,13 @@ func NewStorage() *Storage {
         sync.Mutex{}}
 }
 
-func (storage *Storage) Store(hash string, data []byte, expire int64) {
+func (storage *Storage) Store(hash string, data []byte, expire int64, is_cache bool) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
     v, ok := storage.mappedData[hash];
 	if !ok {
-        is_cache := false
-        if (expire <= 0) { // NOTE(alexander): assumes that caching is done when expire is 0
-            fmt.Println("Caching object with hash and data:")
-            fmt.Println(hash)
-            fmt.Println(data)
-            expire = maxExpireCache
-            is_cache = true
+        if expire <= 0 {
+            return
         }
         
         expireTimer := time.NewTimer(time.Duration(expire)*time.Second)
@@ -52,11 +45,6 @@ func (storage *Storage) Store(hash string, data []byte, expire int64) {
         go func() {
             <-expireTimer.C
             storage.Delete(hash, is_cache)
-            v2, ok2 := storage.mappedData[hash]
-            fmt.Print("Data object timing out: ")
-            fmt.Println(ok2)
-            fmt.Print("with object: ")
-            fmt.Println(v2)
         }()
 	} else {
         if (v.expireTimer != nil) {

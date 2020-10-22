@@ -18,6 +18,7 @@ type Payload struct {
 	Data []byte
     TTL int64
 	Contacts []Contact
+    Cache bool // HACK(alexander): differentiate between STORE used for normal storing and ones for caching
 }
 
 type RPCType int

@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+    "math"
 )
 
 const k = 5
@@ -90,7 +91,7 @@ func (server *Server) SendPingMessage(contact *Contact) bool {
 		Type: Ping,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{"", nil, maxExpire, nil}}
+		Payload: Payload{"", nil, maxExpire, nil, false}}
 
 	conn := rpcMsg.SendTo(server.sendToCh, contact.Address, true)
 	if conn != nil {
@@ -147,7 +148,7 @@ func (server *Server) StartNodeLookup(id KademliaID, notCalled []Contact, expire
 
 	go server.NodeLookupSender(id, contactsCh, contactCh, expire)
 
-	contacts, _ := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
+	contacts, _, _ := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
 	return contacts
 }
 
@@ -209,12 +210,17 @@ func (server *Server) ValueLookup(hash string) Payload {
 
 		go server.ValueLookupSender(hash, contactsCh, contactCh, intermediateCh)
 
-		_, contact := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
+		_, contact, num_nodes_apart := RunLookup(&id, server.table.GetMe(), notCalled, contactCh, contactsCh)
 		close(contactsCh)
 		close(contactCh)
 
+
 		payload := <-inbetweenCh
 		if payload.Data != nil {
+            payload.Cache = true
+            if (num_nodes_apart >= 1) {
+                payload.TTL = int64(math.Pow(float64(num_nodes_apart), -2.0)*180.0)
+            }
             rpcMsg := RPCMessage{
                 Type: Store,
                 IsNode: true,
@@ -242,7 +248,7 @@ func (server *Server) ValueLookupSender(hash string, writeCh chan<- LookupRespon
 				isDone = true
 				mutex.Unlock()
 
-				resultCh <- Payload{"", nil, maxExpire, nil}
+				resultCh <- Payload{"", nil, maxExpire, nil, false}
 			}
 			return
 		}
@@ -335,10 +341,11 @@ func (server *Server) HandleClient(conn *net.UDPConn) {
 	if data.err != nil {
 		return
 	}
-    fmt.Printf("TTL = %d\n", data.rpcMsg.Payload.TTL)
+
 	if data.rpcMsg.IsNode {
 		server.AddContact(data.rpcMsg.Sender)
 	}
+    fmt.Printf("TTL = %d\n", data.rpcMsg.Payload.TTL)
 
 	switch data.rpcMsg.Type {
 	case Ping:
@@ -367,7 +374,7 @@ func (server *Server) HandlePingMessage(conn *net.UDPConn, addr *net.UDPAddr) {
 		Type: Ping,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{"",nil, maxExpire, nil,}}
+		Payload: Payload{"",nil, maxExpire, nil, false}}
 
 	server.sendResponseCh <- SendResponseStruct{rpcMsg, conn, addr}
 }
@@ -377,8 +384,8 @@ func (server *Server) HandleStoreMessage(msg *RPCMessage, conn *net.UDPConn, add
 		Type: Store,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{"", nil, maxExpire, nil}}
-	server.storage.Store(msg.Payload.Hash, msg.Payload.Data, msg.Payload.TTL)
+		Payload: Payload{"", nil, maxExpire, nil, false}}
+	server.storage.Store(msg.Payload.Hash, msg.Payload.Data, msg.Payload.TTL, msg.Payload.Cache)
 	server.sendResponseCh <- SendResponseStruct{rpcMsg, conn, addr}
 }
 
@@ -437,7 +444,6 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
                 case <-t.forgetCh:
                     return
                 case _ = <-t.ticker.C:
-                    fmt.Printf("Refreshing storage of data with\nhash: %s\nttl: %d\n", rpcMsg.Payload.Hash, rpcMsg.Payload.TTL)
                     for _, c := range closest {
                         rpcMsg := RPCMessage{
                             Type: Refresh,
@@ -484,7 +490,7 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
 		Type: CliPut,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{rpcMsg.Payload.Hash, nil, maxExpire, nil}}
+		Payload: Payload{rpcMsg.Payload.Hash, nil, maxExpire, nil, false}}
 	server.sendResponseCh <- SendResponseStruct{response, conn, addr}
 }
 
@@ -504,7 +510,7 @@ func (server *Server) HandleCliForgetMessage(rpcMsg *RPCMessage, conn *net.UDPCo
 		Type: CliForget,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{rpcMsg.Payload.Hash, nil, 0, nil}}
+		Payload: Payload{rpcMsg.Payload.Hash, nil, 0, nil, false}}
 	server.sendResponseCh <- SendResponseStruct{response, conn, addr}
 }
 
@@ -513,7 +519,7 @@ func (server *Server) HandleCliExitMessage(conn *net.UDPConn, addr *net.UDPAddr)
 		Type: CliExit,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{"", nil, maxExpire, nil}}
+		Payload: Payload{"", nil, maxExpire, nil, false}}
 	server.sendResponseCh <- SendResponseStruct{rpcMsg, conn, addr}
 
 	fmt.Println("Shutting down server")

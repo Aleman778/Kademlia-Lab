@@ -27,7 +27,7 @@ type LookupResponse struct {
 	hasValue bool
 }
 
-func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan LookupResponse) ([]Contact, Contact) {
+func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Contact, receiveCh <-chan LookupResponse) ([]Contact, Contact, int) {
 	me.CalcDistance(id)
 	lookup := Lookup{
 		id: id,
@@ -44,10 +44,18 @@ func RunLookup(id *KademliaID, me Contact, contacts []Contact, sendCh chan<- Con
 
 	lookup.wg.Wait()
 
+    before := 0
+    for i, contact := range lookup.called {
+        if contact.ID.Equals(lookup.closestHasNotValue.ID) {
+            before = i
+            break;
+        }
+    }
+
 	if len(lookup.called) < k {
-		return lookup.called, lookup.closestHasNotValue
+		return lookup.called, lookup.closestHasNotValue, before
 	}
-	return lookup.called[:k], lookup.closestHasNotValue
+	return lookup.called[:k], lookup.closestHasNotValue, before
 }
 
 func (self *Lookup) recursiveLookup() {

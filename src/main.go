@@ -91,7 +91,7 @@ func main() {
             }
             hash := sha1.Sum([]byte(data))
             hash_string := hex.EncodeToString(hash[:])
-            payload := Payload{string(hash_string), []byte(data), *objectTTL, nil}
+            payload := Payload{string(hash_string), []byte(data), *objectTTL, nil, false}
             SendMessage(getRpcCh, sendToCh, CliPut, payload, os.Stdout);
             break;
 
@@ -114,7 +114,7 @@ func main() {
                 return;
             }
 
-            payload := Payload{string(hash), nil, *objectTTL, nil}
+            payload := Payload{string(hash), nil, *objectTTL, nil, false}
             SendMessage(getRpcCh, sendToCh, CliGet, payload, os.Stdout);
             break;
 
@@ -137,7 +137,7 @@ func main() {
                 return;
             }
 
-            payload := Payload{string(hash), nil, *objectTTL, nil}
+            payload := Payload{string(hash), nil, *objectTTL, nil, false}
             SendMessage(getRpcCh, sendToCh, CliForget, payload, os.Stdout);
 
         case "join":
@@ -170,7 +170,7 @@ func main() {
                 fmt.Printf("%s\n", EXIT_HELP_STRING);
                 return;
             }
-            payload := Payload{"", nil, *objectTTL, nil}
+            payload := Payload{"", nil, *objectTTL, nil, false}
             SendMessage(getRpcCh, sendToCh, CliExit, payload, os.Stdout);
             break;
         default:
