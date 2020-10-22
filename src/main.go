@@ -27,8 +27,6 @@ const EXIT_HELP_STRING string   = "Usage:  kademlia kill\n\n" +
                                   "Kills the currently running kademlia node"
 
 func main() {
-    rand.Seed(time.Now().UTC().UnixNano())
-
 	// Setup go routine for getting rpc messages
 	getRpcCh := make(chan GetRPCConfig)
 	defer close(getRpcCh)
@@ -39,11 +37,16 @@ func main() {
 	defer close(sendToCh)
 	go SendToStarter(sendToCh)
 
-    // Setup CLI arguments
-    showVersion := flag.Bool("version", false, "Print version number and quit");
-    showV := flag.Bool("v", false, "Print version number and quit");
-    showHelp := flag.Bool("help", false, "Show help information");
-    objectTTL := flag.Int64("ttl", maxExpire, "Objects time to live");
+    RunCLI(getRpcCh, sendToCh)
+}
+
+var showVersion *bool
+var showV *bool
+var showHelp *bool
+var objectTTL *int64
+
+func RunCLI(getRpcCh chan GetRPCConfig, sendToCh chan SendToStruct) {
+    rand.Seed(time.Now().UTC().UnixNano())
 
     // Filter CLI command from args, for some reason golang flags fails if there are commands in the arguments.
     command := "";
@@ -61,10 +64,16 @@ func main() {
         }
     }
 
+    flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+    showVersion = flag.Bool("version", false, "Print version number and quit");
+    showV = flag.Bool("v", false, "Print version number and quit");
+    showHelp = flag.Bool("help", false, "Show help information");
+    objectTTL = flag.Int64("ttl", maxExpire, "Objects time to live");
+
     // Parse flags
     flag.Parse();
     if (*showVersion || *showV) {
-        fmt.Printf(VERSION_STRING);
+        fmt.Println(VERSION_STRING);
         return;
     }
 
@@ -82,12 +91,12 @@ func main() {
                 if !*showHelp { fmt.Printf("\"kademlia put\" require at least 1 argument\n"); }
                 fmt.Print("\n");
                 fmt.Printf("%s\n", PUT_HELP_STRING);
-                return;
+                return
             }
             data := strings.Join(os.Args[argIndex:], " ")
             if len(data) > 255 {
                 fmt.Printf("\nCan't send data that is longer than 255 characters (got %d characters).\n", len(data))
-                os.Exit(1)
+                return
             }
             hash := sha1.Sum([]byte(data))
             hash_string := hex.EncodeToString(hash[:])
@@ -213,7 +222,9 @@ func SendMessage(getRpcCh chan<- GetRPCConfig, sendToCh chan<- SendToStruct, rpc
 
 	conn := rpcMsg.SendTo(sendToCh, "localhost:8080", false)
     fmt.Fprintln(w, "\nSending request to local kademlia server...");
-	defer conn.Close()
+    if conn != nil {
+        defer conn.Close()
+    }
 
 	readCh := make(chan GetRPCData)
 	getRpcCh <- GetRPCConfig{readCh, conn, 30, false}
