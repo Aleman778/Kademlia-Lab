@@ -18,22 +18,26 @@ type Payload struct {
 	Data []byte
     TTL int64
 	Contacts []Contact
+    Cache bool // HACK(alexander): differentiate between STORE used for normal storing and ones for caching
 }
 
 type RPCType int
 
 const (
-	Ping RPCType = iota
-	Store
-	FindNode
-	FindValue
-	CliPut
-	CliGet
-	CliExit
+    Ping RPCType = iota
+    Store
+    Refresh
+    FindNode
+    FindValue
+    CliPut
+    CliGet
+    CliForget
+    CliExit
 )
 
 func (t RPCType) String() string {
-	rpcType := [...]string{"Ping", "Store", "FindNode", "FindValue", "CliPut", "CliGet", "CliExit"}
+    rpcType := [...]string{"Ping", "Store", "Refresh", "FindNode", "FindValue",
+                           "CliPut", "CliGet", "CliForget", "CliExit"}
 	if len(rpcType) < int(t) {
 		return ""
 	}

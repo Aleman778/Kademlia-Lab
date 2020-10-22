@@ -9,6 +9,9 @@ func TestRPCTypeString(t *testing.T) {
 	if Store.String() != "Store" {
 		t.Errorf("String of Store does not return Store")
 	}
+	if Refresh.String() != "Refresh" {
+		t.Errorf("String of Refresh does not return Refresh")
+	}
 	if FindNode.String() != "FindNode" {
 		t.Errorf("String of FindNode does not return FindNode")
 	}
@@ -21,10 +24,13 @@ func TestRPCTypeString(t *testing.T) {
 	if CliGet.String() != "CliGet" {
 		t.Errorf("String of CliGet does not return CliGet")
 	}
+	if CliForget.String() != "CliForget" {
+		t.Errorf("String of CliForget does not return CliForget")
+	}
 	if CliExit.String() != "CliExit" {
 		t.Errorf("String of CliExit does not return CliExit")
 	}
-	var rpc RPCType = 8
+	var rpc RPCType = 10
 	if rpc.String() != "" {
 		t.Errorf("Empty string not returned on invalid RPCType")
 	}

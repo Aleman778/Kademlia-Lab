@@ -45,7 +45,7 @@ func TestBootStrapNode(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, []Contact{contact1},},
+			Payload: Payload{"",nil, maxExpire, []Contact{contact1}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -61,7 +61,7 @@ func TestBootStrapNode(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: contact1,
-			Payload: Payload{"",nil, maxExpire, []Contact{contact2, contact1},},
+			Payload: Payload{"",nil, maxExpire, []Contact{contact2, contact1}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -76,7 +76,7 @@ func TestBootStrapNode(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: contact2,
-			Payload: Payload{"",nil, maxExpire, nil,},
+			Payload: Payload{"",nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: &test_err,
@@ -115,7 +115,7 @@ func TestValueLookup(t *testing.T) {
 	}()
 
 	//go server.ValueLookup(hash_string, maxExpire)
-	result := server.ValueLookup(hash_string, maxExpire)
+	result := server.ValueLookup(hash_string)
 
 	verifyPayload(t, result, "", nil, nil)
 
@@ -148,7 +148,7 @@ func TestValueLookupSender(t *testing.T) {
 			Type: FindValue,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{hash_string, []byte(data), maxExpire, []Contact{},},
+			Payload: Payload{hash_string, []byte(data), maxExpire, []Contact{}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -180,7 +180,7 @@ func TestValueLookupSender(t *testing.T) {
 			Type: FindValue,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"", nil, maxExpire, []Contact{},},
+			Payload: Payload{"", nil, maxExpire, []Contact{}, false},
 		},
 		addr: nil,
 		err: &test_err,
@@ -245,7 +245,7 @@ func TestSendFindDataMessage(t *testing.T) {
 			Type: FindValue,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, []Contact{contact},},
+			Payload: Payload{"",nil, maxExpire, []Contact{contact}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -284,7 +284,7 @@ func TestSendFindDataMessageError(t *testing.T) {
 			Type: FindValue,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, []Contact{},},
+			Payload: Payload{"",nil, maxExpire, []Contact{}, false},
 		},
 		addr: nil,
 		err: &test_err,
@@ -318,7 +318,7 @@ func TestSendFindContactMessage(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, []Contact{contact},},
+			Payload: Payload{"",nil, maxExpire, []Contact{contact}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -354,7 +354,7 @@ func TestSendFindContactMessageError(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, nil,},
+			Payload: Payload{"",nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: &test_err,
@@ -384,7 +384,7 @@ func TestHandleClientError(t *testing.T) {
 			Type: Ping,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, nil,},
+			Payload: Payload{"",nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: &test_err,
@@ -407,7 +407,7 @@ func TestHandlePingMessage(t *testing.T) {
 			Type: Ping,
 			IsNode: true,
 			Sender: contact,
-			Payload: Payload{"",nil, maxExpire, nil,},
+			Payload: Payload{"",nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: nil,
@@ -437,7 +437,7 @@ func TestHandleStoreMessage(t *testing.T) {
 			Type: Store,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{hash_string, []byte(data), maxExpire, nil,},
+			Payload: Payload{hash_string, []byte(data), maxExpire, nil, false},
 		},
 		addr: nil,
 		err: nil,
@@ -450,7 +450,7 @@ func TestHandleStoreMessage(t *testing.T) {
 	verifyRPCMessage(t, result.rpcMsg, Store, true, server.table.GetMe())
 	verifyPayload(t, result.rpcMsg.Payload, "", nil, nil)
 
-	if val, ok := server.storage.Load(hash_string, result.rpcMsg.Payload.TTL); ok {
+	if val, ok := server.storage.Load(hash_string); ok {
 		if string(val) != data {
 			t.Errorf("Expected %s got %s", data, string(val))
 		}
@@ -474,7 +474,7 @@ func TestHandleFindNodeMessage(t *testing.T) {
 			Type: FindNode,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"", nil, maxExpire, []Contact{contact},},
+			Payload: Payload{"", nil, maxExpire, []Contact{contact}, false},
 		},
 		addr: nil,
 		err: nil,
@@ -500,7 +500,7 @@ func TestHandleFindValueMessage(t *testing.T) {
 	hash := sha1.Sum([]byte(data))
 	hash_string := hex.EncodeToString(hash[:])
 
-	server.storage.Store(hash_string, []byte(data), maxExpire)
+	server.storage.Store(hash_string, []byte(data), maxExpire, false)
 
 	go server.HandleClient(nil)
 
@@ -509,7 +509,7 @@ func TestHandleFindValueMessage(t *testing.T) {
 			Type: FindValue,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{hash_string,nil, maxExpire, nil,},
+			Payload: Payload{hash_string,nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: nil,
@@ -535,7 +535,7 @@ func TestHandleFindValueMessageFail(t *testing.T) {
 		Type: FindValue,
 		IsNode: true,
 		Sender: server.table.GetMe(),
-		Payload: Payload{hash_string,nil, maxExpire, nil,},
+		Payload: Payload{hash_string,nil, maxExpire, nil, false},
 	}
 
 	go server.HandleFindValueMessage(&rpcMsg, nil, nil)
@@ -563,7 +563,7 @@ func TestHandleCliPutMessage(t *testing.T) {
 			Type: CliPut,
 			IsNode: false,
 			Sender: contact,
-			Payload: Payload{hash_string, []byte(data), maxExpire, nil,},
+			Payload: Payload{hash_string, []byte(data), maxExpire, nil, false},
 		},
 		addr: nil,
 		err: nil,
@@ -584,7 +584,7 @@ func TestHandleCliGetMessage(t *testing.T) {
 	hash := sha1.Sum([]byte(data))
 	hash_string := hex.EncodeToString(hash[:])
 
-	server.storage.Store(hash_string, []byte(data), maxExpire)
+	server.storage.Store(hash_string, []byte(data), maxExpire, false)
 
 	go server.HandleClient(nil)
 
@@ -593,7 +593,7 @@ func TestHandleCliGetMessage(t *testing.T) {
 			Type: CliGet,
 			IsNode: false,
 			Sender: contact,
-			Payload: Payload{hash_string, nil, maxExpire, nil,},
+			Payload: Payload{hash_string, nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: nil,
@@ -619,7 +619,7 @@ func TestServerAddContact(t *testing.T) {
 			Type: Ping,
 			IsNode: true,
 			Sender: server.table.GetMe(),
-			Payload: Payload{"",nil, maxExpire, nil,},
+			Payload: Payload{"",nil, maxExpire, nil, false},
 		},
 		addr: nil,
 		err: &err,
