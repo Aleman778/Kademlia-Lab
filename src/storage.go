@@ -3,6 +3,7 @@ package main
 import (
 	"sync"
     "time"
+    "fmt"
 )
 
 type RefreshTicker struct {
@@ -23,6 +24,7 @@ type WrappedData struct {
 }
 
 const maxExpire = 86400
+const maxExpireCache = 10
 
 func NewStorage() *Storage {
 	return &Storage{
@@ -36,14 +38,30 @@ func (storage *Storage) Store(hash string, data []byte, expire int64) {
 	defer storage.mutex.Unlock()
     v, ok := storage.mappedData[hash];
 	if !ok {
+        is_cache := false
+        if (expire <= 0) { // NOTE(alexander): assumes that caching is done when expire is 0
+            fmt.Println("Caching object with hash and data:")
+            fmt.Println(hash)
+            fmt.Println(data)
+            expire = maxExpireCache
+            is_cache = true
+        }
+        
         expireTimer := time.NewTimer(time.Duration(expire)*time.Second)
 		storage.mappedData[hash] = &WrappedData{data, expire, expireTimer}
         go func() {
             <-expireTimer.C
-            storage.Delete(hash)
+            storage.Delete(hash, is_cache)
+            v2, ok2 := storage.mappedData[hash]
+            fmt.Print("Data object timing out: ")
+            fmt.Println(ok2)
+            fmt.Print("with object: ")
+            fmt.Println(v2)
         }()
 	} else {
-        v.expireTimer.Reset(time.Duration(expire)*time.Second)
+        if (v.expireTimer != nil) {
+            v.expireTimer.Reset(time.Duration(v.expire)*time.Second)
+        }
     }
 }
 
@@ -73,11 +91,11 @@ func (storage *Storage) StopDataRefresh(hash string) {
     }
 }
 
-func (storage *Storage) Delete(hash string) {
+func (storage *Storage) Delete(hash string, is_cache bool) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
     v, ok := storage.mappedData[hash];
-    if ok && v.expireTimer != nil {
+    if ok && v.expireTimer != nil && !is_cache {
         v.expireTimer.Stop()
         t, ok := storage.refreshStorage[hash]
         if ok {

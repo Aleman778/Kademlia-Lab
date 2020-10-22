@@ -437,6 +437,7 @@ func (server *Server) HandleCliPutMessage(rpcMsg *RPCMessage, conn *net.UDPConn,
                 case <-t.forgetCh:
                     return
                 case _ = <-t.ticker.C:
+                    fmt.Printf("Refreshing storage of data with\nhash: %s\nttl: %d\n", rpcMsg.Payload.Hash, rpcMsg.Payload.TTL)
                     for _, c := range closest {
                         rpcMsg := RPCMessage{
                             Type: Refresh,
