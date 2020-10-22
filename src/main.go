@@ -45,7 +45,6 @@ var objectTTL *int64
 
 func RunCLI(getRpcCh chan GetRPCConfig, sendToCh chan SendToStruct) {
     rand.Seed(time.Now().UTC().UnixNano())
-    fmt.Println(os.Args)
 
     // Filter CLI command from args, for some reason golang flags fails if there are commands in the arguments.
     command := "";
@@ -88,7 +87,6 @@ func RunCLI(getRpcCh chan GetRPCConfig, sendToCh chan SendToStruct) {
                 return
             }
             data := strings.Join(os.Args[argIndex:], " ")
-            fmt.Printf("len: %d\n", len(data))
             if len(data) > 255 {
                 fmt.Printf("\nCan't send data that is longer than 255 characters (got %d characters).\n", len(data))
                 return
